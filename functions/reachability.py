@@ -13,8 +13,8 @@ TIME_DEFAULT = 900
 def calculate_isochrone(
     longitude: float,
     latitude: float,
-    mode: Mode = MODES[0],
-    time: int = TIME_DEFAULT,
+    mode: Mode,
+    time: int,
 ) -> dict[str, Polygon]:
     """
     Calculate the isochrone for a given longitude and latitude.

@@ -1,7 +1,7 @@
 import json
 import toml
-from fastapi import FastAPI
-from functions.reachability import Mode, calculate_isochrone
+from fastapi import FastAPI, Query
+from functions.reachability import Mode, calculate_isochrone, MODES, TIME_DEFAULT
 
 # Loading project information from pyproject.toml
 pyproject = toml.load("pyproject.toml")
@@ -19,7 +19,10 @@ app = FastAPI(
 
 @app.get("/reachability")
 def get_reachability(
-    longitude: float, latitude: float, mode: Mode = None, time: int = None
+    longitude: float,
+    latitude: float,
+    mode: Mode = Query(default=MODES[0]),
+    time: int = Query(default=TIME_DEFAULT),
 ):
     return calculate_isochrone(longitude, latitude, mode, time)
 
