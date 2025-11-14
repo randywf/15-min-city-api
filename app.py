@@ -1,20 +1,16 @@
 from fastapi import FastAPI
-
-# Import functions from sub-package
-#from functions.func_a import run_func_a
-#from functions.func_b import run_func_b
-#from functions.func_c import run_func_c
-#from functions.func_d import run_func_d
+from functions.reachability import Mode, calculate_isochrone
 
 app = FastAPI()
 
 
 @app.get("/reachability")
-def endpoint_a():
-    return #run_func_a()
+def get_reachability(
+    longitude: float, latitude: float, mode: Mode = None, time: int = None
+):
+    return calculate_isochrone(longitude, latitude, mode, time)
 
 
 @app.get("/poi")
 def endpoint_b():
-    return #run_func_b()
-
+    return  # run_func_b()
