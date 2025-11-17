@@ -3,7 +3,7 @@ import toml
 from fastapi import FastAPI, Query
 from functions.reachability import Mode, calculate_isochrone, MODES, TIME_DEFAULT
 from functions.overpass_models import OverpassElement
-from functions.poi import get_cafes_in_park_polygon
+from functions.poi import get_amenities_in_park_polygon
 from typing import List
 
 # Loading project information from pyproject.toml
@@ -31,7 +31,7 @@ def get_reachability(
 
 
 @app.get("/poi", response_model=List[OverpassElement])
-async def cafes_in_park():
+async def amenities_in_park():
     "Return cafés inside the predefined park polygon."
-    cafes = await get_cafes_in_park_polygon()
-    return cafes
+    amenities = await get_amenities_in_park_polygon()
+    return amenities
