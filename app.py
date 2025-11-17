@@ -2,7 +2,9 @@ import json
 import toml
 from fastapi import FastAPI, Query
 from functions.reachability import Mode, calculate_isochrone, MODES, TIME_DEFAULT
-from functions.poi import get_poi
+from functions.overpass_models import OverpassElement
+from functions.poi import get_cafes_in_park_polygon
+from typing import List
 
 # Loading project information from pyproject.toml
 pyproject = toml.load("pyproject.toml")
@@ -28,12 +30,8 @@ def get_reachability(
     return calculate_isochrone(longitude, latitude, mode, time)
 
 
-@app.get("/poi")
-def poi_endpoint(
-    longitude: float,
-    latitude: float,
-    mode: str = Query(default="walk"),
-    time: int = Query(default=900),
-    poi_type: str = Query(default=None),
-):
-    return get_poi(longitude, latitude, mode, time, poi_type)
+@app.get("/poi", response_model=List[OverpassElement])
+async def cafes_in_park():
+    "Return cafés inside the predefined park polygon."
+    cafes = await get_cafes_in_park_polygon()
+    return cafes
