@@ -9,7 +9,7 @@ POIS = [
 
 def get_poi(longitude: float, latitude: float, mode: str = "walk", time: int = 900, poi_type: str = None):
     polygon: Polygon = calculate_isochrone(longitude, latitude, mode, time)["isochrone"]
-    
+    # test comment
     # For now, just return all POIs (ignore polygon)
     filtered_pois = [poi for poi in POIS if poi_type is None or poi["type"] == poi_type]
     
