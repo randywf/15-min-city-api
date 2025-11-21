@@ -3,8 +3,11 @@ import toml
 from fastapi import FastAPI, Query
 from functions.reachability import Mode, calculate_isochrone, MODES, TIME_DEFAULT
 from functions.overpass_models import OverpassElement
-from functions.poi import get_amenities_in_park_polygon
+from functions.poi import get_amenities_in_polygon
 from typing import List
+
+# Define a polygon around a park (example coordinates)
+DEFAULT_POLYGON = "51.968 7.625 51.970 7.635 51.965 7.638 51.963 7.628 51.968 7.625"
 
 # Loading project information from pyproject.toml
 pyproject = toml.load("pyproject.toml")
@@ -31,7 +34,17 @@ def get_reachability(
 
 
 @app.get("/poi", response_model=List[OverpassElement])
-async def amenities_in_park():
-    "Return cafés inside the predefined park polygon."
-    amenities = await get_amenities_in_park_polygon()
+async def amenities_in_polygon(
+    polygon: str = Query(
+        DEFAULT_POLYGON,
+        description="Polygon-Koordinaten für Overpass. Wenn leer, wird ein Default verwendet."
+    )
+):
+    """
+    Return amenities for the given polygon area.
+    Optional: /poi?polygon=51.96 7.62 51.97 7.63 ...
+    Wenn kein polygon angegeben wird → Default wird benutzt.
+    """
+    
+    amenities = await get_amenities_in_polygon(polygon)
     return amenities
