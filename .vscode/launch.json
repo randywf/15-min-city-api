@@ -9,8 +9,7 @@
             "args": [
                 "app:app",
                 "--reload"
-            ],
-            "jinja": true
+            ]
         }
     ]
 }

@@ -20,12 +20,18 @@ MODE_TO_R5PY_TRANSPORT_MODE: dict[Mode, TransportMode] = {
     "car": TransportMode.CAR,
 }
 
-# Global transport network
-# TODO: Find a better way to handle this for multiple regions
-_base_dir = Path(__file__).parent.parent
-muenster_transport_network = TransportNetwork(
-    _base_dir / "data" / "muenster" / "muenster-regbez-251127.osm.pbf"
-)
+BASE_DIR = Path(__file__).parent.parent
+DATA_DIR = BASE_DIR / "data"
+
+def load_transport_network(region: str) -> TransportNetwork:
+    region_dir = DATA_DIR / region
+
+    # Find the first .osm.pbf file in the folder
+    files = list(region_dir.glob("*.osm.pbf"))
+    if not files:
+        raise FileNotFoundError(f"No .osm.pbf file found for region '{region}'")
+
+    return TransportNetwork(files[0])
 
 
 def calculate_isochrone(
@@ -39,8 +45,9 @@ def calculate_isochrone(
     Returns a dictionary with the destinations and isochrones.
     """
     point = Point(longitude, latitude)
+    network = load_transport_network("muenster")
     isochrones = Isochrones(
-        transport_network=muenster_transport_network,
+        transport_network=network,
         origins=point,
         isochrones=[time],
         point_grid_resolution=100,
