@@ -3,6 +3,8 @@ from typing import Literal
 from pathlib import Path
 from r5py import Isochrones, TransportNetwork, TransportMode
 from shapely.geometry import Point, MultiPoint, mapping
+from shapely.geometry.base import BaseGeometry
+from shapely.geometry.polygon import Polygon
 
 # Type alias for modes
 Mode = Literal["walk", "bike", "car"]
@@ -43,8 +45,19 @@ def calculate_isochrone(
         isochrones=[time],
         point_grid_resolution=100,
         point_grid_sample_ratio=1.0,
-        transport_modes=[MODE_TO_R5PY_TRANSPORT_MODE[mode]],
+        transport_modes=[MODE_TO_R5PY_TRANSPORT_MODE[mode]]
     )
 
-    multi_point = MultiPoint(isochrones.destinations.geometry)
-    return mapping(multi_point.convex_hull)
+    # Create convex hull of destinations
+    multi = MultiPoint(isochrones.destinations.geometry)
+    hull: BaseGeometry = multi.convex_hull
+
+    # Ensure we have a Polygon
+    if not isinstance(hull, Polygon):
+        # Convert Point or LineString to small Polygon
+        hull = hull.buffer(0.001)
+
+    # Extract exterior coordinates and format as 'lat lon lat lon ...'
+    coord_string = " ".join(f"{lat:.6f} {lon:.6f}" for lon, lat in hull.exterior.coords)
+    return coord_string
+

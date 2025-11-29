@@ -1,6 +1,6 @@
-Installation of UV for Windows
+Installation of UV
 ```
-powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
+pip install uv
 ```
 
 Synchronizing your local environment with this one. 
@@ -12,5 +12,3 @@ Serving of the server, enter this in command line.
 ```
 uvicorn app:app --reload
 ``` 
-
-This is normal text. 
