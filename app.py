@@ -5,6 +5,8 @@ from functions.reachability import Mode, calculate_isochrone, MODES, TIME_DEFAUL
 from functions.overpass_models import OverpassElement
 from functions.poi import get_amenities_in_polygon
 from typing import List, Literal
+from fastapi.middleware.cors import CORSMiddleware
+
 
 # Define a polygon around a park (example coordinates)
 DEFAULT_POLYGON = "51.968 7.625 51.970 7.635 51.965 7.638 51.963 7.628 51.968 7.625"
@@ -20,6 +22,14 @@ app = FastAPI(
     title=title,
     description=description,
     version=version,
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 
