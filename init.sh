@@ -4,7 +4,7 @@ uv sync
 
 set -e
 
-DATA_DIR="/data/muenster"
+DATA_DIR="./data/muenster"
 DOWNLOAD_URL="https://download.geofabrik.de/europe/germany/nordrhein-westfalen/muenster-regbez-latest.osm.pbf"
 TARGET_FILE="$DATA_DIR/muenster.osm.pbf"
 
