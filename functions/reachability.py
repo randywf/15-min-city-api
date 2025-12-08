@@ -63,6 +63,7 @@ def calculate_isochrone(
         point_grid_sample_ratio=1.0,
         transport_modes=[MODE_TO_R5PY_TRANSPORT_MODE[mode]],
     )
+    
     # Create convex hull of destinations
     multi_point = MultiPoint(isochrones.destinations.geometry)
     return mapping(multi_point.convex_hull)
