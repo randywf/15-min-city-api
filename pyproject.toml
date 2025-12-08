@@ -2,7 +2,7 @@
 name = "15-min-city-api"
 version = "0.1.0"
 description = "Add your description here"
-requires-python = ">=3.13"
+requires-python = "==3.12.*"
 dependencies = [
     "asyncio>=4.0.0",
     "fastapi[standard]>=0.121.2",
@@ -11,3 +11,4 @@ dependencies = [
     "toml>=0.10.2",
     "uvicorn>=0.38.0",
 ]
+
