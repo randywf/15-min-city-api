@@ -1,0 +1,4 @@
+### Request POIs within an isochrone
+GET http://localhost:8000/point_to_poi?longitude=7.6280&latitude=51.9625&mode=walk&time=15
+Accept: application/json
+

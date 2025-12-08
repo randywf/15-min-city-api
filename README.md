@@ -1,16 +1,19 @@
-Installation of UV for Windows
+To initialize the whole server use init.sh! \
+Be sure to have Java 11+ running on this server.
+This is needed, because we always want a reasonable version of the road-network and we should not store files this big in Git.
+
+Installation of UV
 ```
-powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
+pip install uv
 ```
 
 Synchronizing your local environment with this one. 
-```
+```sh
 uv sync
 ```
 
 Serving of the server, enter this in command line. 
-```
+```sh
 uvicorn app:app --reload
 ``` 
 
-This is normal text. 

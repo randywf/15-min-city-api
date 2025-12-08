@@ -1,0 +1,25 @@
+services:
+  postgis:
+    image: postgis/postgis:latest
+    container_name: postgis_db
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin
+      POSTGRES_DB: gisdb
+    ports:
+      - "5432:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+
+  app:
+    build: ./app
+    container_name: my_app
+    depends_on:
+      - db
+    environment:
+      DATABASE_URL: postgresql://admin:admin@postgis:5432/gisdb
+    ports:
+      - "8000:8000"
+
+volumes:
+  db_data:
