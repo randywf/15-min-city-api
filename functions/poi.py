@@ -7,6 +7,7 @@ import asyncio
 # Define a polygon around a park (example coordinates)
 PARK_POLYGON_COORDS = "51.968 7.625 51.970 7.635 51.965 7.638 51.963 7.628 51.968 7.625"
 
+
 class Amenity(Enum):
     # --- Mobility ---
     BICYCLE_PARKING = "bicycle_parking"
@@ -45,7 +46,9 @@ class Amenity(Enum):
     # --- Other ---
     TOILETS = "toilets"
 
+
 OVERPASS_URL = "https://overpass-api.de/api/interpreter"
+
 
 async def fetch_overpass_data(query: str) -> List[OverpassElement]:
     """Send Overpass QL to the Overpass API (with retry strategy)."""
@@ -58,10 +61,7 @@ async def fetch_overpass_data(query: str) -> List[OverpassElement]:
             print(f"➡️ Attempt {attempt}...")
 
             async with httpx.AsyncClient(timeout=50.0) as client:
-                response = await client.post(
-                    OVERPASS_URL,
-                    data={"data": query}
-                )
+                response = await client.post(OVERPASS_URL, data={"data": query})
 
             # Check HTTP status
             if response.status_code == 200:
@@ -88,11 +88,19 @@ async def fetch_overpass_data(query: str) -> List[OverpassElement]:
         delay_seconds *= 2  # exponential backoff
 
     # If all retries failed, raise error:
-    raise RuntimeError(f"❌ All {max_retries} retry attempts failed for Overpass query.")
+    raise RuntimeError(
+        f"❌ All {max_retries} retry attempts failed for Overpass query."
+    )
 
 
-
-async def get_amenities_in_polygon(polygon) -> list[OverpassElement]:
+async def get_amenities_in_polygon(polygon: str) -> list[OverpassElement]:
+    """
+    Get amenities in a polygon.
+    Args:
+        polygon: The polygon to get amenities in (format: "lat lon lat lon ...").
+    Returns:
+        A list of Overpass elements.
+    """
     amenity_regex = "|".join(a.value for a in Amenity)
 
     query = f"""

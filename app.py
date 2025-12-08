@@ -47,7 +47,7 @@ def get_reachability(
 async def amenities_in_polygon(
     polygon: str = Query(
         DEFAULT_POLYGON,
-        description="Polygon-Koordinaten für Overpass. Wenn leer, wird ein Default verwendet."
+        description="Polygon-Koordinaten für Overpass. Wenn leer, wird ein Default verwendet.",
     )
 ):
     """
@@ -55,19 +55,19 @@ async def amenities_in_polygon(
     Optional: /poi?polygon=51.96 7.62 51.97 7.63 ...
     Wenn kein polygon angegeben wird → Default wird benutzt.
     """
-    
+
     amenities = await get_amenities_in_polygon(polygon)
     return amenities
+
 
 @app.get("/point_to_poi")
 async def point_to_poi(
     longitude: float = Query(..., description="Longitude of the center point"),
     latitude: float = Query(..., description="Latitude of the center point"),
     mode: Literal["walk", "bike", "car"] = Query(
-        "walk",
-        description="Isochrone mode: walk, bike, or car"
+        "walk", description="Isochrone mode: walk, bike, or car"
     ),
-    time: int = Query(600, description="Isochrone time in seconds")
+    time: int = Query(600, description="Isochrone time in seconds"),
 ):
     """
     Returns a dictionary with:
@@ -79,14 +79,15 @@ async def point_to_poi(
     # Compute polygon from lon/lat and mode
     polygon = calculate_isochrone(longitude, latitude, mode, time)
 
+    # Convert polygon to string format
+    polygon_string = " ".join(
+        f"{lat:.6f} {lon:.6f}" for lon, lat in polygon["coordinates"][0]
+    )
+
     # Query amenities inside the generated polygon
-    amenities = await get_amenities_in_polygon(polygon)
+    amenities = await get_amenities_in_polygon(polygon_string)
 
     # Example scoring logic
-    score = len(amenities) #TODO: Change this to some meaningful metric
+    score = len(amenities)  # TODO: Change this to some meaningful metric
 
-    return {
-        "amenities": amenities,
-        "score": score,
-        "polygon": polygon
-    }
+    return {"amenities": amenities, "score": score, "polygon": polygon}
