@@ -54,11 +54,10 @@ def calculate_isochrone(
     """
     point = Point(longitude, latitude)
     network = load_transport_network("muenster")
-    time_minutes = time / 60
     isochrones = Isochrones(
         transport_network=network,
         origins=point,
-        isochrones=[time_minutes],
+        isochrones=[time],
         point_grid_resolution=100,
         point_grid_sample_ratio=1.0,
         transport_modes=[MODE_TO_R5PY_TRANSPORT_MODE[mode]],

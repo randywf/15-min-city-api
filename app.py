@@ -67,7 +67,7 @@ async def point_to_poi(
     mode: Literal["walk", "bike", "car"] = Query(
         "walk", description="Isochrone mode: walk, bike, or car"
     ),
-    time: int = Query(600, description="Isochrone time in seconds"),
+    time: int = Query(15, description="Isochrone time in minutes"),
 ):
     """
     Returns a dictionary with:
