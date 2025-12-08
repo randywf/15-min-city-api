@@ -11,15 +11,15 @@ services:
     volumes:
       - gis_data:/var/lib/postgresql/data
 
-  # app:
-  #  build: .
-  #  container_name: gis_api
-  #  depends_on:
-  #    - postgis
-  #  environment:
-  #    DATABASE_URL: postgresql://admin:admin@postgis:5432/gisdb
-  #  ports:
-  #    - "8000:8000"
+  app:
+    build: .
+    container_name: gis_api
+    depends_on:
+      - postgis
+    environment:
+      DATABASE_URL: postgresql://admin:admin@postgis:5432/gisdb
+    ports:
+      - "8000:8000"
 
 volumes:
   gis_data:
