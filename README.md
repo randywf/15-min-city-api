@@ -8,12 +8,12 @@ pip install uv
 ```
 
 Synchronizing your local environment with this one. 
-```
+```sh
 uv sync
 ```
 
 Serving of the server, enter this in command line. 
-```
+```sh
 uvicorn app:app --reload
 ``` 
 
