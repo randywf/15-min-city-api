@@ -10,8 +10,6 @@ PARK_POLYGON_COORDS = "51.968 7.625 51.970 7.635 51.965 7.638 51.963 7.628 51.96
 
 class Amenity(Enum):
     # --- Mobility ---
-    BICYCLE_PARKING = "bicycle_parking"
-    PARKING = "parking"
     FUEL = "fuel"
 
     # --- Health ---
@@ -45,6 +43,11 @@ class Amenity(Enum):
 
     # --- Other ---
     TOILETS = "toilets"
+
+class Shop(Enum):
+    SUPERMARKET = "supermarket"
+    BAKERY = "bakery"
+
 
 
 OVERPASS_URL = "https://overpass-api.de/api/interpreter"
@@ -102,13 +105,19 @@ async def get_amenities_in_polygon(polygon: str) -> list[OverpassElement]:
         A list of Overpass elements.
     """
     amenity_regex = "|".join(a.value for a in Amenity)
+    shop_regex = "|".join(s.value for s in Shop)
 
     query = f"""
     [out:json][timeout:80];
 
-    node
-      ["amenity"~"^({amenity_regex})$"]
-      (poly:"{polygon}");
+    (
+      node
+        ["amenity"~"^({amenity_regex})$"]
+        (poly:"{polygon}");
+      node
+        ["shop"~"^({shop_regex})$"]
+        (poly:"{polygon}");
+    );
 
     out geom;
     """
