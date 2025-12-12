@@ -53,12 +53,18 @@ OVERPASS_URL = "https://overpass-api.de/api/interpreter"
 async def fetch_overpass_data(query: str) -> List[OverpassElement]:
     """Send Overpass QL to the Overpass API (with retry strategy)."""
 
-    max_retries = 4
-    delay_seconds = 2  # start delay (will increase)
+    max_timeout_retries = 4
+    max_rate_limit_retries = 4
+    timeout_delay_seconds = 2
+    rate_limit_delay_seconds = 60
 
-    for attempt in range(1, max_retries + 1):
+    num_timeouts = 0
+    num_rate_limits = 0
+    while (
+        num_timeouts < max_timeout_retries and num_rate_limits < max_rate_limit_retries
+    ):
         try:
-            print(f"➡️ Attempt {attempt}...")
+            print(f"➡️ Attempt {num_timeouts + num_rate_limits + 1}...")
 
             async with httpx.AsyncClient(timeout=50.0) as client:
                 response = await client.post(OVERPASS_URL, data={"data": query})
@@ -69,10 +75,20 @@ async def fetch_overpass_data(query: str) -> List[OverpassElement]:
                 json_data = response.json()
                 parsed = OverpassResponse.model_validate(json_data)
                 return parsed.elements
-
-            # Retry only if Overpass timed out
             elif response.status_code == 504:
-                print(f"⚠️ Overpass Timeout (504). Retrying in {delay_seconds}s...")
+                print(
+                    f"⚠️ Overpass Timeout (504). Retrying in {timeout_delay_seconds}s..."
+                )
+                await asyncio.sleep(timeout_delay_seconds)
+                timeout_delay_seconds *= 2
+                num_timeouts += 1
+            elif response.status_code == 429:
+                print(
+                    f"⚠️ Overpass Rate Limit Exceeded (429). Retrying in {rate_limit_delay_seconds}s..."
+                )
+                await asyncio.sleep(rate_limit_delay_seconds)
+                rate_limit_delay_seconds *= 2
+                num_rate_limits += 1
             else:
                 # Any other error → no retry, raise
                 raise RuntimeError(
@@ -81,15 +97,14 @@ async def fetch_overpass_data(query: str) -> List[OverpassElement]:
 
         except (httpx.ConnectError, httpx.ReadTimeout):
             # Retry for network errors
-            print(f"⚠️ Network error. Retrying in {delay_seconds}s...")
-
-        # Wait before next retry
-        await asyncio.sleep(delay_seconds)
-        delay_seconds *= 2  # exponential backoff
+            print(f"⚠️ Network error. Retrying in {timeout_delay_seconds}s...")
+            await asyncio.sleep(timeout_delay_seconds)
+            timeout_delay_seconds *= 2
+            num_timeouts += 1
 
     # If all retries failed, raise error:
     raise RuntimeError(
-        f"❌ All {max_retries} retry attempts failed for Overpass query."
+        f"❌ All {num_timeouts + num_rate_limits} retry attempts failed for Overpass query."
     )
 
 
