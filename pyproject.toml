@@ -8,6 +8,7 @@ dependencies = [
     "dotenv>=0.9.9",
     "fastapi[standard]>=0.121.2",
     "geojson>=3.2.0",
+    "psycopg2>=2.9.11",
     "r5py>=1.0.7",
     "sqlalchemy>=2.0.45",
     "toml>=0.10.2",
