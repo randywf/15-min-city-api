@@ -12,10 +12,10 @@ services:
       - db_data:/var/lib/postgresql/data
 
   app:
-    build: ./app
+    build: .
     container_name: my_app
     depends_on:
-      - db
+      - postgis
     environment:
       DATABASE_URL: postgresql://admin:admin@postgis:5432/gisdb
     ports:
