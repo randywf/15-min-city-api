@@ -5,9 +5,14 @@ description = "Add your description here"
 requires-python = "==3.12.*"
 dependencies = [
     "asyncio>=4.0.0",
+    "dotenv>=0.9.9",
     "fastapi[standard]>=0.121.2",
+    "geoalchemy2>=0.18.1",
     "geojson>=3.2.0",
+    "psycopg2>=2.9.11",
+    "pyproj>=3.7.2",
     "r5py>=1.0.7",
+    "sqlalchemy>=2.0.45",
     "toml>=0.10.2",
     "uvicorn>=0.38.0",
 ]
