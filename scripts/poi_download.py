@@ -1,3 +1,4 @@
+import argparse
 import asyncio
 import logging
 import math
@@ -143,10 +144,33 @@ def transfer_amenities_to_database(amenities: list[dict], engine: Engine):
     logger.info("Amenities transferred to database")
 
 
+def has_amenities_data(engine: Engine) -> bool:
+    """Check if amenities table has data."""
+    try:
+        with engine.connect() as conn:
+            result = conn.execute(text("SELECT COUNT(*) FROM amenities"))
+            count = result.scalar()
+            return count > 0
+    except Exception as e:
+        logger.warning(f"Error checking amenities data: {e}")
+        return False
+
+
 if __name__ == "__main__":
-    muenster_boundary_polygon = load_muenster_boundary()
-    boundary_sections = divide_boundary_into_sections(muenster_boundary_polygon)
-    transformed_boundary_sections = reproject_boundary_sections(boundary_sections)
-    all_amenities = asyncio.run(download_amenities(transformed_boundary_sections))
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--update",
+        action="store_true",
+        help="Update the amenities data",
+    )
+    args = parser.parse_args()
+
     engine = create_engine(POSTGRES_CONNECTION_STRING)
-    transfer_amenities_to_database(all_amenities, engine)
+    if not args.update and has_amenities_data(engine):
+        logger.info("Amenities data already exists, skipping download and transfer")
+    else:
+        muenster_boundary_polygon = load_muenster_boundary()
+        boundary_sections = divide_boundary_into_sections(muenster_boundary_polygon)
+        transformed_boundary_sections = reproject_boundary_sections(boundary_sections)
+        all_amenities = asyncio.run(download_amenities(transformed_boundary_sections))
+        transfer_amenities_to_database(all_amenities, engine)
