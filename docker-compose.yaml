@@ -20,6 +20,12 @@ services:
       DATABASE_URL: postgresql://admin:admin@postgis:5432/gisdb
     ports:
       - "8000:8000"
+    command: >
+      sh -c "
+        uv run python scripts/create_schema.py &&
+        uv run python scripts/poi_download.py &&
+        uv run fastapi run app.py --port 80 --host 0.0.0.0
+      "
 
 volumes:
   db_data:
