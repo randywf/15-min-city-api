@@ -5,7 +5,7 @@ import os
 import geojson
 import pyproj
 from shapely.geometry import Polygon, Point
-from sqlalchemy import create_engine, Engine
+from sqlalchemy import create_engine, Engine, text
 import geopandas as gpd
 
 # Add the project root to the Python path
@@ -90,9 +90,6 @@ def transfer_amenities_to_database(amenities: list[dict], engine: Engine):
     # Create a geopandas dataframe to transfer amenities to the database
     amenities_df = gpd.GeoDataFrame(amenities, geometry="geometry")
     logger.info("Transferring amenities to database")
-
-    # Use SQLAlchemy connection for upsert
-    from sqlalchemy import text
 
     with engine.connect() as conn:
         for _, row in amenities_df.iterrows():
