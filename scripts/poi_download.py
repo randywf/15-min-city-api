@@ -30,6 +30,7 @@ POSTGRES_CONNECTION_STRING = os.getenv("DATABASE_URL")
 
 
 def load_muenster_boundary():
+    logger.info("Loading muenster boundary")
     # Open the muenster administrative boundary geojson and convert to a polygon
     muenster_boundary = geojson.load(
         open(
@@ -43,6 +44,7 @@ def load_muenster_boundary():
 
 
 def divide_boundary_into_sections(muenster_boundary_polygon: Polygon):
+    logger.info("Dividing muenster boundary into sections")
     # Divide the muenster boundary into SECTION_SIZE x SECTION_SIZE meter ections
     min_x, min_y, max_x, max_y = muenster_boundary_polygon.bounds
     boundary_sections = []
@@ -55,6 +57,7 @@ def divide_boundary_into_sections(muenster_boundary_polygon: Polygon):
                 # Clip the square polygon to the muenster boundary polygon
                 clipped_polygon = square_polygon.intersection(muenster_boundary_polygon)
                 boundary_sections.append(clipped_polygon)
+    logger.info(f"Divided muenster boundary into {len(boundary_sections)} sections")
     return boundary_sections
 
 
@@ -81,9 +84,25 @@ async def download_amenities(boundary_sections: list[Polygon]):
             }
             for amenity in amenities
         ]
+        logger.info(f"Found {len(flattened)} amenities for section {i+1}")
         all_amenities.extend(flattened)
 
+    logger.info(f"Downloaded {len(all_amenities)} amenities")
     return all_amenities
+
+
+def reproject_boundary_sections(boundary_sections: list[Polygon]):
+    # Reproject the boundary sections to lon/lat
+    logger.info("Reprojecting boundary sections to lon/lat")
+    transformer = pyproj.Transformer.from_crs(SOURCE_CRS, TARGET_CRS, always_xy=True)
+    transformed_boundary_sections = []
+    for i, section in enumerate(boundary_sections):
+        logger.info(f"Reprojecting boundary section {i+1} of {len(boundary_sections)}")
+        coords = zip(section.exterior.coords.xy[0], section.exterior.coords.xy[1])
+        transformed_coords = [transformer.transform(x, y) for x, y in coords]
+        section = Polygon(transformed_coords)
+        transformed_boundary_sections.append(section)
+    return transformed_boundary_sections
 
 
 def transfer_amenities_to_database(amenities: list[dict], engine: Engine):
@@ -125,33 +144,9 @@ def transfer_amenities_to_database(amenities: list[dict], engine: Engine):
 
 
 if __name__ == "__main__":
-    logger.info("Loading muenster boundary polygon")
     muenster_boundary_polygon = load_muenster_boundary()
-
-    logger.info("Dividing muenster boundary into sections")
     boundary_sections = divide_boundary_into_sections(muenster_boundary_polygon)
-
-    # Reproject the boundary sections to lon/lat
-    logger.info("Reprojecting boundary sections to lon/lat")
-    transformer = pyproj.Transformer.from_crs(SOURCE_CRS, TARGET_CRS, always_xy=True)
-    transformed_boundary_sections = []
-    for i, section in enumerate(boundary_sections):
-        logger.info(f"Reprojecting boundary section {i+1} of {len(boundary_sections)}")
-        coords = zip(section.exterior.coords.xy[0], section.exterior.coords.xy[1])
-        transformed_coords = [transformer.transform(x, y) for x, y in coords]
-        section = Polygon(transformed_coords)
-        transformed_boundary_sections.append(section)
-
-    logger.info("Downloading amenities")
+    transformed_boundary_sections = reproject_boundary_sections(boundary_sections)
     all_amenities = asyncio.run(download_amenities(transformed_boundary_sections))
-    logger.info(f"Downloaded {len(all_amenities)} amenities")
-
-    # Connect to the database
-    logger.info("Connecting to database")
     engine = create_engine(POSTGRES_CONNECTION_STRING)
-    logger.info("Database connected")
-
-    # Transfer amenities to the database
-    logger.info("Transferring amenities to database")
     transfer_amenities_to_database(all_amenities, engine)
-    logger.info("Amenities transferred to database")
