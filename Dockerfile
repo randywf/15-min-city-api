@@ -10,5 +10,11 @@ COPY . /app
 WORKDIR /app
 RUN uv sync --frozen --no-cache
 
+# Create the database schema.
+RUN uv run python scripts/create_schema.py
+
+# Download the amenities.
+RUN uv run python scripts/poi_download.py
+
 # Run the application.
-CMD ["/app/.venv/bin/fastapi", "run", "app/app.py", "--port", "80", "--host", "0.0.0.0"]
+CMD ["uv", "run", "fastapi", "run", "app.py", "--port", "80", "--host", "0.0.0.0"]
