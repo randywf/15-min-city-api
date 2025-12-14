@@ -29,7 +29,7 @@ services:
         echo 'Running POI download...' &&
         uv run python scripts/poi_download.py &&
         echo 'Starting FastAPI...' &&
-        uv run fastapi run app.py --port 80 --host 0.0.0.0
+        uv run fastapi run app.py --port 8000 --host 0.0.0.0
       "
 
 volumes:
