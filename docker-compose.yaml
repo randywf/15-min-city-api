@@ -22,8 +22,13 @@ services:
       - "8000:8000"
     command: >
       sh -c "
+        echo 'Waiting for database...' &&
+        until pg_isready -h postgis -U admin -d gisdb; do sleep 1; done &&
+        echo 'Running schema creation...' &&
         uv run python scripts/create_schema.py &&
+        echo 'Running POI download...' &&
         uv run python scripts/poi_download.py &&
+        echo 'Starting FastAPI...' &&
         uv run fastapi run app.py --port 80 --host 0.0.0.0
       "
 
