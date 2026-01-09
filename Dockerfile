@@ -1,5 +1,11 @@
 FROM python:3.12-slim
 
+# Install Java for r5py
+RUN apt-get update && apt-get install -y \
+    openjdk-21-jdk-headless \
+    postgresql-client \
+    && rm -rf /var/lib/apt/lists/*
+
 # Install uv.
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
@@ -9,6 +15,3 @@ COPY . /app
 # Install the application dependencies.
 WORKDIR /app
 RUN uv sync --frozen --no-cache
-
-# Run the application.
-CMD ["/app/.venv/bin/fastapi", "run", "app/app.py", "--port", "80", "--host", "0.0.0.0"]
