@@ -11,6 +11,17 @@ services:
     volumes:
       - db_data:/var/lib/postgresql/data
 
+  pgadmin4:
+    image: dpage/pgadmin4
+    container_name: pgadmin4-gis
+    ports:
+      - '5050:80'
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@admin.de
+      PGADMIN_DEFAULT_PASSWORD: admin
+    links:
+      - postgis
+
   app:
     build: .
     container_name: my_app
@@ -18,8 +29,15 @@ services:
       - postgis
     environment:
       DATABASE_URL: postgresql://admin:admin@postgis:5432/gisdb
+      JAVA_TOOL_OPTIONS: >
+        -Xmx8g
+        -XX:ActiveProcessorCount=4
+
     ports:
       - "8000:8000"
+    mem_reservation: 5g
+    mem_limit: 12g
+    cpus: "4.0"
     command: >
       sh -c "
         echo 'Waiting for database...' &&
