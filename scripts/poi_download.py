@@ -1,7 +1,6 @@
 import argparse
 import asyncio
 import logging
-import math
 import os
 import geojson
 import pyproj
@@ -9,18 +8,17 @@ from shapely.geometry import Polygon, Point
 from sqlalchemy import create_engine, Engine, text
 import geopandas as gpd
 
-# Add the project root to the Python path
 from pathlib import Path
 import sys
 
 root_dir = Path(__file__).parent.parent
 sys.path.append(str(root_dir))
-from functions.poi import get_amenities_in_polygon
 
-# Load environment variables
+from functions.poi import get_amenities_in_polygon
 from dotenv import load_dotenv
 
-SECTION_SIZE = 2000
+load_dotenv()
+
 SOURCE_CRS = pyproj.CRS("EPSG:25832")
 TARGET_CRS = pyproj.CRS("EPSG:4326")
 
@@ -30,147 +28,113 @@ logger = logging.getLogger(__name__)
 POSTGRES_CONNECTION_STRING = os.getenv("DATABASE_URL")
 
 
-def load_muenster_boundary():
-    logger.info("Loading muenster boundary")
-    # Open the muenster administrative boundary geojson and convert to a polygon
-    muenster_boundary = geojson.load(
-        open(
-            root_dir / "data" / "muenster" / "muenster_administrative_boundary.geojson"
-        )
+def load_muenster_boundary() -> Polygon:
+    logger.info("Loading Münster boundary")
+
+    with open(
+        root_dir / "data" / "muenster" / "muenster_administrative_boundary.geojson"
+    ) as f:
+        boundary = geojson.load(f)
+
+    return Polygon(boundary["features"][0]["geometry"]["coordinates"][0][0])
+
+
+def reproject_polygon(polygon: Polygon) -> Polygon:
+    logger.info("Reprojecting boundary to EPSG:4326")
+
+    transformer = pyproj.Transformer.from_crs(
+        SOURCE_CRS, TARGET_CRS, always_xy=True
     )
-    muenster_boundary_polygon = Polygon(
-        muenster_boundary["features"][0]["geometry"]["coordinates"][0][0]
+
+    transformed_coords = [
+        transformer.transform(x, y) for x, y in polygon.exterior.coords
+    ]
+
+    return Polygon(transformed_coords)
+
+
+def polygon_to_overpass_string(polygon: Polygon) -> str:
+    # Overpass expects "lat lon lat lon ..."
+    return " ".join(
+        f"{lat:.6f} {lon:.6f}"
+        for lon, lat in polygon.exterior.coords[:-1]
     )
-    return muenster_boundary_polygon
 
 
-def divide_boundary_into_sections(muenster_boundary_polygon: Polygon):
-    logger.info("Dividing muenster boundary into sections")
-    # Divide the muenster boundary into SECTION_SIZE x SECTION_SIZE meter ections
-    min_x, min_y, max_x, max_y = muenster_boundary_polygon.bounds
-    boundary_sections = []
-    for x in range(int(math.floor(min_x)), int(math.ceil(max_x)), 1000):
-        for y in range(int(math.floor(min_y)), int(math.ceil(max_y)), 1000):
-            square_polygon = Polygon(
-                [(x, y), (x + 1000, y), (x + 1000, y + 1000), (x, y + 1000)]
-            )
-            if muenster_boundary_polygon.contains(square_polygon):
-                # Clip the square polygon to the muenster boundary polygon
-                clipped_polygon = square_polygon.intersection(muenster_boundary_polygon)
-                boundary_sections.append(clipped_polygon)
-    logger.info(f"Divided muenster boundary into {len(boundary_sections)} sections")
-    return boundary_sections
+async def download_amenities(boundary: Polygon) -> list[dict]:
+    logger.info("Downloading amenities for full boundary")
 
+    coords = polygon_to_overpass_string(boundary)
+    amenities = await get_amenities_in_polygon(coords)
 
-async def download_amenities(boundary_sections: list[Polygon]):
-    # Download amenity POIs for each boundary section
-    all_amenities = []
-    for i, section in enumerate(boundary_sections):
-        logger.info(
-            f"Downloading amenities for section {i+1} of {len(boundary_sections)}"
-        )
-        exterior_coords = zip(
-            section.exterior.coords.xy[0][:-1], section.exterior.coords.xy[1][:-1]
-        )
-        coords = " ".join(f"{lat:.6f} {lon:.6f}" for lon, lat in exterior_coords)
-        amenities = await get_amenities_in_polygon(coords)
-        # Flatten the amenity object, convert lat/lon to point geometry
-        flattened = [
-            {
-                "id": amenity.id,
-                "geometry": Point(amenity.lon, amenity.lat),
-                "name": amenity.tags.name,
-                "amenity": amenity.tags.amenity,
-                "cuisine": amenity.tags.cuisine,
-            }
-            for amenity in amenities
-        ]
-        logger.info(f"Found {len(flattened)} amenities for section {i+1}")
-        all_amenities.extend(flattened)
+    logger.info(f"Found {len(amenities)} amenities")
 
-    logger.info(f"Downloaded {len(all_amenities)} amenities")
-    return all_amenities
-
-
-def reproject_boundary_sections(boundary_sections: list[Polygon]):
-    # Reproject the boundary sections to lon/lat
-    logger.info("Reprojecting boundary sections to lon/lat")
-    transformer = pyproj.Transformer.from_crs(SOURCE_CRS, TARGET_CRS, always_xy=True)
-    transformed_boundary_sections = []
-    for i, section in enumerate(boundary_sections):
-        logger.info(f"Reprojecting boundary section {i+1} of {len(boundary_sections)}")
-        coords = zip(section.exterior.coords.xy[0], section.exterior.coords.xy[1])
-        transformed_coords = [transformer.transform(x, y) for x, y in coords]
-        section = Polygon(transformed_coords)
-        transformed_boundary_sections.append(section)
-    return transformed_boundary_sections
+    return [
+        {
+            "id": amenity.id,
+            "geometry": Point(amenity.lon, amenity.lat),
+            "name": amenity.tags.name,
+            "amenity": amenity.tags.amenity,
+            "cuisine": amenity.tags.cuisine,
+        }
+        for amenity in amenities
+    ]
 
 
 def transfer_amenities_to_database(amenities: list[dict], engine: Engine):
-    # Create a geopandas dataframe to transfer amenities to the database
-    amenities_df = gpd.GeoDataFrame(amenities, geometry="geometry")
     logger.info("Transferring amenities to database")
 
-    with engine.connect() as conn:
-        for _, row in amenities_df.iterrows():
-            # Convert geometry to WKT for PostGIS
-            geom_wkt = row.geometry.wkt
+    df = gpd.GeoDataFrame(amenities, geometry="geometry", crs="EPSG:4326")
 
-            upsert_sql = text(
-                """
-                INSERT INTO amenities (id, geometry, name, amenity, cuisine)
-                VALUES (:id, ST_GeomFromText(:geom, 4326), :name, :amenity, :cuisine)
-                ON CONFLICT (id) 
-                DO UPDATE SET
-                    geometry = EXCLUDED.geometry,
-                    name = EXCLUDED.name,
-                    amenity = EXCLUDED.amenity,
-                    cuisine = EXCLUDED.cuisine
-            """
-            )
+    upsert_sql = text(
+        """
+        INSERT INTO amenities (id, geometry, name, amenity, cuisine)
+        VALUES (:id, ST_GeomFromText(:geom, 4326), :name, :amenity, :cuisine)
+        ON CONFLICT (id)
+        DO UPDATE SET
+            geometry = EXCLUDED.geometry,
+            name = EXCLUDED.name,
+            amenity = EXCLUDED.amenity,
+            cuisine = EXCLUDED.cuisine
+        """
+    )
 
+    with engine.begin() as conn:
+        for _, row in df.iterrows():
             conn.execute(
                 upsert_sql,
                 {
-                    "id": row.get("id"),
-                    "geom": geom_wkt,
-                    "name": row.get("name"),
-                    "amenity": row.get("amenity"),
-                    "cuisine": row.get("cuisine"),
+                    "id": row.id,
+                    "geom": row.geometry.wkt,
+                    "name": row.name,
+                    "amenity": row.amenity,
+                    "cuisine": row.cuisine,
                 },
             )
-        conn.commit()
 
-    logger.info("Amenities transferred to database")
+    logger.info("Amenities transferred successfully")
 
 
 def has_amenities_data(engine: Engine) -> bool:
-    """Check if amenities table has data."""
-    try:
-        with engine.connect() as conn:
-            result = conn.execute(text("SELECT COUNT(*) FROM amenities"))
-            count = result.scalar()
-            return count > 0
-    except Exception as e:
-        logger.warning(f"Error checking amenities data: {e}")
-        return False
+    with engine.connect() as conn:
+        return conn.execute(
+            text("SELECT EXISTS (SELECT 1 FROM amenities)")
+        ).scalar()
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--update",
-        action="store_true",
-        help="Update the amenities data",
-    )
+    parser.add_argument("--update", action="store_true")
     args = parser.parse_args()
 
     engine = create_engine(POSTGRES_CONNECTION_STRING)
+
     if not args.update and has_amenities_data(engine):
-        logger.info("Amenities data already exists, skipping download and transfer")
-    else:
-        muenster_boundary_polygon = load_muenster_boundary()
-        boundary_sections = divide_boundary_into_sections(muenster_boundary_polygon)
-        transformed_boundary_sections = reproject_boundary_sections(boundary_sections)
-        all_amenities = asyncio.run(download_amenities(transformed_boundary_sections))
-        transfer_amenities_to_database(all_amenities, engine)
+        logger.info("Amenities already present — skipping")
+        sys.exit(0)
+
+    boundary = load_muenster_boundary()
+    boundary = reproject_polygon(boundary)
+
+    amenities = asyncio.run(download_amenities(boundary))
+    transfer_amenities_to_database(amenities, engine)
