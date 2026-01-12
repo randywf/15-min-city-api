@@ -1,13 +1,10 @@
-from typing import List
 import httpx
 from .overpass_models import OverpassResponse, OverpassElement
 from enum import Enum
 import asyncio
-from typing import List
-from dataclasses import dataclass
 from shapely.geometry import Polygon, Point
 from sqlalchemy import text, Engine
-
+from typing import List, Union, Dict, Any
 
 # Define a polygon around a park (example coordinates)
 PARK_POLYGON_COORDS = "51.968 7.625 51.970 7.635 51.965 7.638 51.963 7.628 51.968 7.625"
@@ -52,7 +49,98 @@ class Amenity(Enum):
     TOILETS = "toilets"
 
 
+AMENITY_CATEGORIES = {
+    "mobility": {
+        "rank": 10,
+        "amenities": [
+            Amenity.BICYCLE_PARKING,
+            Amenity.PARKING,
+            Amenity.FUEL,
+        ],
+    },
+    "health": {
+        "rank": 20,
+        "amenities": [
+            Amenity.CLINIC,
+            Amenity.HOSPITAL,
+            Amenity.PHARMACY,
+        ],
+    },
+    "education_and_culture": {
+        "rank": 30,
+        "amenities": [
+            Amenity.SCHOOL,
+            Amenity.LIBRARY,
+            Amenity.THEATRE,
+            Amenity.CINEMA,
+        ],
+    },
+    "religious_places": {
+        "rank": 40,
+        "amenities": [
+            Amenity.CHURCH,
+            Amenity.MOSQUE,
+            Amenity.BUDDHIST_TEMPLE,
+            Amenity.HINDU_TEMPLE,
+            Amenity.SYNAGOGUE,
+        ],
+    },
+    "food_and_drinks": {
+        "rank": 50,
+        "amenities": [
+            Amenity.RESTAURANT,
+            Amenity.BAR,
+            Amenity.BBQ,
+            Amenity.BIERGARTEN,
+            Amenity.CAFE,
+            Amenity.FAST_FOOD,
+            Amenity.FOOD_COURT,
+            Amenity.ICE_CREAM,
+            Amenity.PUB,
+        ],
+    },
+    "other": {
+        "rank": 99,
+        "amenities": [
+            Amenity.TOILETS,
+        ],
+    },
+}
+
+
+
 OVERPASS_URL = "https://overpass-api.de/api/interpreter"
+
+def build_default_amenity_state() -> Dict[str, Any]:
+    """
+    Returns a frontend-ready amenity state structure.
+    """
+    state: Dict[str, Any] = {}
+
+    for category, cfg in AMENITY_CATEGORIES.items():
+        state[category] = {
+            "rank": cfg["rank"],
+            "enabled": True,
+            "amenities": {
+                amenity.value: {"enabled": True}
+                for amenity in cfg["amenities"]
+            },
+        }
+
+    return state
+
+def extract_enabled_amenities(state: dict) -> list[str]:
+    enabled = []
+
+    for category in state.values():
+        if not category.get("enabled", False):
+            continue
+
+        for amenity, cfg in category["amenities"].items():
+            if cfg.get("enabled", False):
+                enabled.append(amenity)
+
+    return enabled
 
 
 async def fetch_overpass_data(query: str) -> List[OverpassElement]:
@@ -118,44 +206,47 @@ async def get_amenities_in_polygon_postgres(
     engine: Engine,
     polygon: Polygon,
     query_point: Point,
+    amenity_state: dict,
 ):
+    enabled_amenities = extract_enabled_amenities(amenity_state)
+
+    if not enabled_amenities:
+        return []
+
     polygon_wkt = polygon.wkt
     lon, lat = query_point.x, query_point.y
 
     sql = text("""
-        WITH ranked AS (
-            SELECT
-                id,
-                name,
-                amenity,
-                cuisine,
-                geometry,
-                ST_Distance(
-                    geometry::geography,
-                    ST_SetSRID(ST_MakePoint(:lon, :lat), 4326)::geography
-                ) AS distance,
-                ROW_NUMBER() OVER (
+               WITH ranked AS (SELECT id,
+                                      name,
+                                      amenity,
+                                      cuisine,
+                                      geometry,
+                                      ST_Distance(
+                                              geometry::geography,
+                                              ST_SetSRID(ST_MakePoint(:lon, :lat), 4326)::geography
+                                      ) AS         distance,
+                                      ROW_NUMBER() OVER (
                     PARTITION BY amenity
                     ORDER BY geometry <-> ST_SetSRID(ST_MakePoint(:lon, :lat), 4326)
                 ) AS rn
-            FROM amenities
-            WHERE ST_Within(
-                geometry,
-                ST_GeomFromText(:polygon_wkt, 4326)
-            )
-        )
-        SELECT
-            id,
-            name,
-            amenity,
-            cuisine,
-            ST_Y(geometry) AS lat,
-            ST_X(geometry) AS lon,
-            distance
-        FROM ranked
-        WHERE rn <= 2
-        ORDER BY amenity, distance;
-    """)
+                               FROM amenities
+                               WHERE amenity = ANY (:enabled_amenities)
+                                 AND ST_Within(
+                                       geometry,
+                                       ST_GeomFromText(:polygon_wkt, 4326)
+                                     ))
+               SELECT id,
+                      name,
+                      amenity,
+                      cuisine,
+                      ST_Y(geometry) AS lat,
+                      ST_X(geometry) AS lon,
+                      distance
+               FROM ranked
+               WHERE rn <= 2
+               ORDER BY amenity, distance;
+               """)
 
     with engine.connect() as conn:
         result = conn.execute(
@@ -164,6 +255,7 @@ async def get_amenities_in_polygon_postgres(
                 "lon": lon,
                 "lat": lat,
                 "polygon_wkt": polygon_wkt,
+                "enabled_amenities": enabled_amenities,
             }
         )
 

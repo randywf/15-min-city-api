@@ -1,47 +1,96 @@
 import math
+from pprint import pprint
+
+
+def build_amenity_importance_map(
+    amenity_state: dict,
+    *,
+    min_importance: float,
+) -> dict[str, float]:
+    """
+    Returns: { amenity_name: importance }
+    """
+    # only enabled categories
+    enabled_categories = [
+        (cat, cfg)
+        for cat, cfg in amenity_state.items()
+        if cfg.get("enabled", False)
+    ]
+
+    if not enabled_categories:
+        return {}
+
+    # normalize rank → importance
+    ranks = [cfg["rank"] for _, cfg in enabled_categories]
+    min_rank, max_rank = min(ranks), max(ranks)
+    span = max(1, max_rank - min_rank)
+
+    importance_map = {}
+
+    for _, cfg in enabled_categories:
+        rank = cfg["rank"]
+        importance = 1 - ((rank - min_rank) / span)
+        importance = max(importance, min_importance)
+
+        for amenity, a_cfg in cfg["amenities"].items():
+            if a_cfg.get("enabled", False):
+                importance_map[amenity] = importance
+
+    return importance_map
+
+import math
+
 
 def calculate_score(
     amenities: list[dict],
-    priority_order: list[str],
+    amenity_state: dict,
     max_distance: float,
+    *,
     min_importance: float = 0.2,
-    type_cap_multiplier: float = 1.0,  # 1.0 = max equals importance
+    density_strength: float = 1.5,
 ) -> float:
-    if not amenities or not priority_order:
+    if not amenities or not amenity_state:
         return 0.0
 
-    priority_index = {
-        amenity: i for i, amenity in enumerate(priority_order)
-    }
+    importance_map = build_amenity_importance_map(
+        amenity_state,
+        min_importance=min_importance,
+    )
 
-    # Group distances by amenity type
-    grouped = {}
+    if not importance_map:
+        return 0.0
+
+    # group distances per enabled amenity
+    grouped: dict[str, list[float]] = {}
     for a in amenities:
         t = a["amenity"]
-        if t in priority_index:
+        if t in importance_map:
             grouped.setdefault(t, []).append(a["distance"])
 
     raw_score = 0.0
-    max_possible = 0.0
+    max_possible = sum(importance_map.values())
 
-    for t, idx in priority_index.items():
-        importance = 1 - (idx / max(1, len(priority_order) - 1))
-        importance = max(importance, min_importance)
-        max_possible += importance
-
-        if t not in grouped:
+    for amenity, importance in importance_map.items():
+        if amenity not in grouped:
             continue
 
-        type_score = 0.0
-        for d in grouped[t]:
-            distance_weight = math.exp(-d / max_distance)
-            type_score += importance * distance_weight
+        # Step 1: distance decay
+        weighted_sum = sum(
+            math.exp(-d / max_distance)
+            for d in grouped[amenity]
+        )
 
-        # 🔒 Cap contribution per type
-        raw_score += min(type_score, importance * type_cap_multiplier)
+        # Step 2: density saturation
+        saturation = 1 - math.exp(
+            -weighted_sum / density_strength
+        )
+
+        raw_score += importance * saturation
 
     normalized = (raw_score / max_possible) * 10
     return round(min(10.0, normalized), 2)
+
+
 
 if __name__ == "__main__":
     # --- test data (similar to your real output) ---
@@ -56,27 +105,51 @@ if __name__ == "__main__":
         {"amenity": "pharmacy", "distance": 190.0},
     ]
 
-    priority_order = [
-        "restaurant",
-        "cafe",
-        "bar",
-        "pharmacy",
-        "library",
-    ]
-
+    amenity_state = {
+        "mobility": {
+            "rank": 10,
+            "enabled": True,
+            "amenities": {
+                "parking": {"enabled": True},
+            },
+        },
+        "food_and_drinks": {
+            "rank": 50,
+            "enabled": True,
+            "amenities": {
+                "restaurant": {"enabled": True},
+                "cafe": {"enabled": True},
+                "bar": {"enabled": False},  # disabled
+            },
+        },
+        "education": {
+            "rank": 30,
+            "enabled": True,
+            "amenities": {
+                "library": {"enabled": True},
+            },
+        },
+        "health": {
+            "rank": 20,
+            "enabled": False,  # entire category disabled
+            "amenities": {
+                "pharmacy": {"enabled": True},
+            },
+        },
+    }
     max_distance = max(a["distance"] for a in amenities)
+
+    print("\nAmenity importance map:")
+    pprint(build_amenity_importance_map(amenity_state, min_importance=0.2))
+
+    print("\nInput amenities:")
+    pprint(amenities)
 
     score = calculate_score(
         amenities=amenities,
-        priority_order=priority_order,
-        max_distance=max_distance,
+        amenity_state=amenity_state,
+        max_distance=500,
     )
 
-    print("=== SCORE TEST ===")
-    print(f"Priority order: {priority_order}")
-    print(f"Max distance: {max_distance:.1f} m\n")
+    print(f"\nFinal score: {score}/10\n")
 
-    for a in amenities:
-        print(f"- {a['amenity']:10s} @ {a['distance']:6.1f} m")
-
-    print("\nFinal score:", score)
