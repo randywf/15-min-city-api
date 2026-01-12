@@ -290,3 +290,25 @@ async def get_amenities_in_polygon(polygon: str) -> list[OverpassElement]:
     print(f"Found: {len(elements)} amenities")
 
     return elements
+
+def get_all_pois_postgres(engine: Engine):
+    """
+    Get all pois for heatmap
+    :param engine:
+    :return:
+    """
+    sql = text("""
+        SELECT
+            id,
+            name,
+            amenity,
+            cuisine,
+            ST_Y(geometry) AS lat,
+            ST_X(geometry) AS lon
+        FROM amenities
+        ORDER BY amenity, name;
+    """)
+
+    with engine.connect() as conn:
+        result = conn.execute(sql)
+        return result.mappings().all()
