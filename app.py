@@ -1,12 +1,17 @@
 import json
 import toml
 from fastapi import FastAPI, Query, HTTPException
+from shapely import Point, Polygon
+from shapely.geometry import shape
+
 from functions.reachability import Mode, calculate_isochrone, MODES, TIME_DEFAULT
 from functions.overpass_models import OverpassElement
-from functions.poi import get_amenities_in_polygon
-from typing import List, Literal
+from functions.poi import get_amenities_in_polygon, get_amenities_in_polygon_postgres
+from typing import List, Literal, Any
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import create_engine, Engine
 
+from functions.scoring import calculate_score
 
 # Define a polygon around a park (example coordinates)
 DEFAULT_POLYGON = "51.968 7.625 51.970 7.635 51.965 7.638 51.963 7.628 51.968 7.625"
@@ -68,6 +73,11 @@ async def point_to_poi(
         "walk", description="Isochrone mode: walk, bike, or car"
     ),
     time: int = Query(600, description="Isochrone time in seconds"),
+    amenity_ordered_by_relevance: List[str] = Query(
+        ["restaurant", "cafe", "bar", "pharmacy", "library"],
+        description="Ordered amenity relevance (highest priority first)",
+        example=["restaurant", "cafe", "bar", "pharmacy", "library"],
+    ),
 ):
     """
     Returns a dictionary with:
@@ -79,15 +89,35 @@ async def point_to_poi(
     # Compute polygon from lon/lat and mode
     polygon = calculate_isochrone(longitude, latitude, mode, time)
 
-    # Convert polygon to string format
-    polygon_string = " ".join(
-        f"{lat:.6f} {lon:.6f}" for lon, lat in polygon["coordinates"][0]
-    )
+    query_point = Point(longitude, latitude)
 
+    def create_db_engine() -> Engine:
+        return create_engine(
+            "postgresql+psycopg2://admin:admin@postgis:5432/gisdb",
+            echo=False,
+            future=True,
+        )
+
+    engine = create_db_engine()
     # Query amenities inside the generated polygon
-    amenities = await get_amenities_in_polygon(polygon_string)
 
-    # Example scoring logic
-    score = len(amenities)  # TODO: Change this to some meaningful metric
+    def geojson_to_polygon(geojson: dict[str, Any]) -> Polygon:
+        geom = shape(geojson)
+
+        if not isinstance(geom, Polygon):
+            raise TypeError(f"Expected Polygon, got {geom.geom_type}")
+
+        return geom
+
+    amenities = await get_amenities_in_polygon_postgres(engine, geojson_to_polygon(polygon), query_point)
+
+    # Scoring logic call
+    max_distance = max(a["distance"] for a in amenities) if amenities else 1
+
+    score = calculate_score(
+        amenities=amenities,
+        priority_order=amenity_ordered_by_relevance,
+        max_distance=max_distance,
+    )
 
     return {"amenities": amenities, "score": score, "polygon": polygon}

@@ -3,6 +3,11 @@ import httpx
 from .overpass_models import OverpassResponse, OverpassElement
 from enum import Enum
 import asyncio
+from typing import List
+from dataclasses import dataclass
+from shapely.geometry import Polygon, Point
+from sqlalchemy import text, Engine
+
 
 # Define a polygon around a park (example coordinates)
 PARK_POLYGON_COORDS = "51.968 7.625 51.970 7.635 51.965 7.638 51.963 7.628 51.968 7.625"
@@ -106,6 +111,64 @@ async def fetch_overpass_data(query: str) -> List[OverpassElement]:
     raise RuntimeError(
         f"❌ All {num_timeouts + num_rate_limits} retry attempts failed for Overpass query."
     )
+
+
+
+async def get_amenities_in_polygon_postgres(
+    engine: Engine,
+    polygon: Polygon,
+    query_point: Point,
+):
+    polygon_wkt = polygon.wkt
+    lon, lat = query_point.x, query_point.y
+
+    sql = text("""
+        WITH ranked AS (
+            SELECT
+                id,
+                name,
+                amenity,
+                cuisine,
+                geometry,
+                ST_Distance(
+                    geometry::geography,
+                    ST_SetSRID(ST_MakePoint(:lon, :lat), 4326)::geography
+                ) AS distance,
+                ROW_NUMBER() OVER (
+                    PARTITION BY amenity
+                    ORDER BY geometry <-> ST_SetSRID(ST_MakePoint(:lon, :lat), 4326)
+                ) AS rn
+            FROM amenities
+            WHERE ST_Within(
+                geometry,
+                ST_GeomFromText(:polygon_wkt, 4326)
+            )
+        )
+        SELECT
+            id,
+            name,
+            amenity,
+            cuisine,
+            ST_Y(geometry) AS lat,
+            ST_X(geometry) AS lon,
+            distance
+        FROM ranked
+        WHERE rn <= 2
+        ORDER BY amenity, distance;
+    """)
+
+    with engine.connect() as conn:
+        result = conn.execute(
+            sql,
+            {
+                "lon": lon,
+                "lat": lat,
+                "polygon_wkt": polygon_wkt,
+            }
+        )
+
+        return result.mappings().all()
+
 
 
 async def get_amenities_in_polygon(polygon: str) -> list[OverpassElement]:

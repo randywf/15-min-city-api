@@ -1,3 +1,6 @@
+import sys
+sys.argv.append(["--max-memory", "99%"]) # Before r5py for performance
+
 from geojson import GeoJSON
 from typing import Literal
 from pathlib import Path
@@ -8,6 +11,7 @@ from shapely.geometry.polygon import Polygon
 
 # Type alias for modes
 Mode = Literal["walk", "bike", "car"]
+
 
 # Constants
 MODES: list[Mode] = ["walk", "bike", "car"]
@@ -60,10 +64,35 @@ def calculate_isochrone(
         origins=point,
         isochrones=[time_minutes],
         point_grid_resolution=100,
-        point_grid_sample_ratio=1.0,
+        point_grid_sample_ratio=0.3,
         transport_modes=[MODE_TO_R5PY_TRANSPORT_MODE[mode]],
     )
-    
+
     # Create convex hull of destinations
     multi_point = MultiPoint(isochrones.destinations.geometry)
     return mapping(multi_point.convex_hull)
+
+
+if __name__ == "__main__":
+    import json
+
+    # Example test values
+    test_longitude = 7.625  # Münster city center longitude
+    test_latitude = 51.962  # Münster city center latitude
+    test_mode: Mode = "walk"  # can be "walk", "bike", or "car"
+    test_time = 900  # 15 minutes in seconds
+
+    try:
+        geojson_polygon = calculate_isochrone(
+            longitude=test_longitude,
+            latitude=test_latitude,
+            mode=test_mode,
+            time=test_time
+        )
+
+        print("Isochrone GeoJSON:")
+        print(json.dumps(geojson_polygon, indent=2))
+    except FileNotFoundError as e:
+        print(f"Error: {e}")
+    except Exception as e:
+        print(f"Unexpected error: {e}")
