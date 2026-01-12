@@ -1,4 +1,7 @@
 import sys
+
+from sqlalchemy import Engine, text
+
 sys.argv.append(["--max-memory", "99%"]) # Before r5py for performance
 
 from geojson import GeoJSON
@@ -6,13 +9,14 @@ from typing import Literal
 from pathlib import Path
 from r5py import Isochrones, TransportNetwork, TransportMode
 from shapely.geometry import Point, MultiPoint, mapping
+import json
 from shapely.geometry.base import BaseGeometry
 from shapely.geometry.polygon import Polygon
 
 # Type alias for modes
 Mode = Literal["walk", "bike", "car"]
 
-
+ISOCHRONE_TTL = "1 day"  # PostgreSQL interval
 # Constants
 MODES: list[Mode] = ["walk", "bike", "car"]
 TIME_DEFAULT = 15
@@ -40,6 +44,7 @@ def load_transport_network(region: str) -> TransportNetwork:
 
 
 def calculate_isochrone(
+    engine: Engine,
     longitude: float,
     latitude: float,
     mode: Mode,
@@ -57,6 +62,37 @@ def calculate_isochrone(
         A GeoJSON object with the isochrone polygon.
     """
     point = Point(longitude, latitude)
+
+    # Try to load from DB for caching
+    with engine.connect() as conn:
+        result = conn.execute(
+            text("""
+                SELECT ST_AsGeoJSON(geom) AS geojson
+                FROM isochrones
+                WHERE
+                    mode = :mode
+                    AND time_seconds = :time
+                    AND ST_Equals(
+                        origin,
+                        ST_SetSRID(ST_MakePoint(:lon, :lat), 4326)
+                    )
+                    AND created_at >= now() - INTERVAL :ttl
+                LIMIT 1
+            """),
+            {
+                "mode": mode,
+                "time": time,
+                "lon": longitude,
+                "lat": latitude,
+                "ttl": ISOCHRONE_TTL,
+            },
+        ).fetchone()
+
+        if result:
+            return json.loads(result.geojson)
+
+
+    # Calculate, if not existing.
     network = load_transport_network("muenster")
     time_minutes = time / 60
     isochrones = Isochrones(
@@ -70,7 +106,41 @@ def calculate_isochrone(
 
     # Create convex hull of destinations
     multi_point = MultiPoint(isochrones.destinations.geometry)
-    return mapping(multi_point.convex_hull)
+    hull = multi_point.convex_hull
+    geojson = mapping(hull)
+
+    with engine.begin() as conn:
+        conn.execute(
+            text("""
+                INSERT INTO isochrones (
+                    mode,
+                    time_seconds,
+                    origin,
+                    geom,
+                    created_at
+                )
+                VALUES (
+                    :mode,
+                    :time,
+                    ST_SetSRID(ST_MakePoint(:lon, :lat), 4326),
+                    ST_SetSRID(ST_GeomFromGeoJSON(:geom), 4326),
+                    now()
+                )
+                ON CONFLICT (mode, time_seconds, origin)
+                DO UPDATE SET
+                    geom = EXCLUDED.geom,
+                    created_at = now()
+            """),
+            {
+                "mode": mode,
+                "time": time,
+                "lon": longitude,
+                "lat": latitude,
+                "geom": json.dumps(geojson),
+            },
+        )
+
+    return geojson
 
 
 if __name__ == "__main__":

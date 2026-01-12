@@ -6,7 +6,8 @@ from shapely.geometry import shape
 
 from functions.reachability import Mode, calculate_isochrone, MODES, TIME_DEFAULT
 from functions.overpass_models import OverpassElement
-from functions.poi import get_amenities_in_polygon, get_amenities_in_polygon_postgres
+from functions.poi import get_amenities_in_polygon, get_amenities_in_polygon_postgres, \
+    build_default_amenity_state, get_all_pois_postgres
 from typing import List, Literal, Any
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import create_engine, Engine
@@ -38,6 +39,13 @@ app.add_middleware(
 )
 
 
+def create_db_engine() -> Engine:
+    return create_engine(
+        "postgresql+psycopg2://admin:admin@postgis:5432/gisdb",
+        echo=False,
+        future=True,
+    )
+
 @app.get("/reachability")
 def get_reachability(
     longitude: float,
@@ -64,6 +72,23 @@ async def amenities_in_polygon(
     amenities = await get_amenities_in_polygon(polygon)
     return amenities
 
+@app.get("/amenities")
+async def get_amenities():
+    """
+       Returns an ordered list with all amenities.:
+       - amenities: list of POIs
+       """
+    return build_default_amenity_state()
+
+
+@app.get("/heatmap_pois")
+def get_heatmap_pois():
+    """
+       Returns an ordered list with all amenities.:
+       - amenities: list of POIs
+       """
+    engine = create_db_engine()
+    return get_all_pois_postgres(engine)
 
 @app.get("/point_to_poi")
 async def point_to_poi(
@@ -73,11 +98,11 @@ async def point_to_poi(
         "walk", description="Isochrone mode: walk, bike, or car"
     ),
     time: int = Query(600, description="Isochrone time in seconds"),
-    amenity_ordered_by_relevance: List[str] = Query(
-        ["restaurant", "cafe", "bar", "pharmacy", "library"],
+    amenity_ordered_by_relevance: Any = Query(
+        default=build_default_amenity_state(),
         description="Ordered amenity relevance (highest priority first)",
-        example=["restaurant", "cafe", "bar", "pharmacy", "library"],
-    ),
+    )
+    ,
 ):
     """
     Returns a dictionary with:
@@ -86,19 +111,13 @@ async def point_to_poi(
     - polygon: generated isochrone polygonW
     """
 
+    engine = create_db_engine()
     # Compute polygon from lon/lat and mode
-    polygon = calculate_isochrone(longitude, latitude, mode, time)
+    polygon = calculate_isochrone(engine, longitude, latitude, mode, time)
 
     query_point = Point(longitude, latitude)
 
-    def create_db_engine() -> Engine:
-        return create_engine(
-            "postgresql+psycopg2://admin:admin@postgis:5432/gisdb",
-            echo=False,
-            future=True,
-        )
 
-    engine = create_db_engine()
     # Query amenities inside the generated polygon
 
     def geojson_to_polygon(geojson: dict[str, Any]) -> Polygon:
@@ -109,14 +128,14 @@ async def point_to_poi(
 
         return geom
 
-    amenities = await get_amenities_in_polygon_postgres(engine, geojson_to_polygon(polygon), query_point)
+    amenities = await get_amenities_in_polygon_postgres(engine, geojson_to_polygon(polygon), query_point, amenity_state=amenity_ordered_by_relevance) #TODO: Add the filter here aswell.
 
     # Scoring logic call
     max_distance = max(a["distance"] for a in amenities) if amenities else 1
 
     score = calculate_score(
         amenities=amenities,
-        priority_order=amenity_ordered_by_relevance,
+        amenity_state=amenity_ordered_by_relevance,
         max_distance=max_distance,
     )
 

@@ -2,3 +2,11 @@
 GET http://localhost:8000/point_to_poi?longitude=7.625&latitude=51.962&mode=walk&time=900
 Accept: application/json
 
+### Get all available amenities (amenity state definition)
+GET http://localhost:8000/amenities
+Accept: application/json
+
+
+### Get all POIs for heatmap generation (no distance, no filtering)
+GET http://localhost:8000/heatmap_pois
+Accept: application/json
