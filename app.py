@@ -7,7 +7,7 @@ from shapely.geometry import shape
 from functions.reachability import Mode, calculate_isochrone, MODES, TIME_DEFAULT
 from functions.overpass_models import OverpassElement
 from functions.poi import get_amenities_in_polygon, get_amenities_in_polygon_postgres, \
-    build_default_amenity_state
+    build_default_amenity_state, get_all_pois_postgres
 from typing import List, Literal, Any
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import create_engine, Engine
@@ -79,6 +79,16 @@ async def get_amenities():
        - amenities: list of POIs
        """
     return build_default_amenity_state()
+
+
+@app.get("/heatmap_pois")
+def get_heatmap_pois():
+    """
+       Returns an ordered list with all amenities.:
+       - amenities: list of POIs
+       """
+    engine = create_db_engine()
+    return get_all_pois_postgres(engine)
 
 @app.get("/point_to_poi")
 async def point_to_poi(
