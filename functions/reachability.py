@@ -1,4 +1,8 @@
+import os
 import sys
+import logging
+import time
+from contextlib import contextmanager
 
 from sqlalchemy import Engine, text
 
@@ -12,6 +16,10 @@ from shapely.geometry import Point, MultiPoint, mapping
 import json
 from shapely.geometry.base import BaseGeometry
 from shapely.geometry.polygon import Polygon
+import pyrosm
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # Type alias for modes
 Mode = Literal["walk", "bike", "car"]
@@ -31,6 +39,21 @@ MODE_TO_R5PY_TRANSPORT_MODE: dict[Mode, TransportMode] = {
 BASE_DIR = Path(__file__).parent.parent
 DATA_DIR = BASE_DIR / "data"
 
+DEBUG_TIMING = os.getenv("DEBUG_TIMING", "false").lower() == "true"
+
+
+@contextmanager
+def timer(label: str):
+    if not DEBUG_TIMING:
+        yield
+        return
+    start = time.perf_counter()
+    try:
+        yield
+    finally:
+        end = time.perf_counter()
+        logger.info(f"[TIMING] {label}: {end - start:.3f} seconds")
+
 
 def load_transport_network(region: str) -> TransportNetwork:
     region_dir = DATA_DIR / region
@@ -41,6 +64,17 @@ def load_transport_network(region: str) -> TransportNetwork:
         raise FileNotFoundError(f"No .osm.pbf file found for region '{region}'")
 
     return TransportNetwork(files[0])
+
+
+def load_network_geometry(region: str):
+    region_dir = DATA_DIR / region
+    files = list(region_dir.glob("*.osm.pbf"))
+    if not files:
+        raise FileNotFoundError(f"No .osm.pbf file found")
+
+    osm = pyrosm.OSM(files[0])
+    streets = osm.get_network(network_type="all")
+    return streets.unary_union  # Returns a single geometry
 
 
 def calculate_isochrone(
@@ -61,91 +95,111 @@ def calculate_isochrone(
     Returns:
         A GeoJSON object with the isochrone polygon.
     """
+    time_minutes = time / 60
     point = Point(longitude, latitude)
 
     # Try to load from DB for caching
-    with engine.connect() as conn:
-        result = conn.execute(
-            text(
+    with timer("load_isochrone_from_db"):
+        with engine.connect() as conn:
+            result = conn.execute(
+                text(
+                    """
+                    SELECT ST_AsGeoJSON(geom) AS geojson
+                    FROM isochrones
+                    WHERE
+                        mode = :mode
+                        AND time_seconds = :time
+                        AND ST_Equals(
+                            origin,
+                            ST_SetSRID(ST_MakePoint(:lon, :lat), 4326)
+                        )
+                        AND created_at >= now() - INTERVAL :ttl
+                    LIMIT 1
                 """
-                SELECT ST_AsGeoJSON(geom) AS geojson
-                FROM isochrones
-                WHERE
-                    mode = :mode
-                    AND time_seconds = :time
-                    AND ST_Equals(
-                        origin,
-                        ST_SetSRID(ST_MakePoint(:lon, :lat), 4326)
-                    )
-                    AND created_at >= now() - INTERVAL :ttl
-                LIMIT 1
-            """
-            ),
-            {
-                "mode": mode,
-                "time": time,
-                "lon": longitude,
-                "lat": latitude,
-                "ttl": ISOCHRONE_TTL,
-            },
-        ).fetchone()
+                ),
+                {
+                    "mode": mode,
+                    "time": time,
+                    "lon": longitude,
+                    "lat": latitude,
+                    "ttl": ISOCHRONE_TTL,
+                },
+            ).fetchone()
 
-        if result:
-            return json.loads(result.geojson)
+            if result:
+                return json.loads(result.geojson)
 
     # Calculate, if not existing.
-    network = load_transport_network("muenster")
-    time_minutes = time / 60
-    try:
-        isochrones = Isochrones(
-            transport_network=network,
-            origins=point,
-            isochrones=[time_minutes],
-            point_grid_resolution=100,
-            point_grid_sample_ratio=0.3,
-            transport_modes=[MODE_TO_R5PY_TRANSPORT_MODE[mode]],
-        )
-        # Create convex hull of destinations
-        multi_point = MultiPoint(isochrones.destinations.geometry)
-        hull = multi_point.convex_hull
-        geojson = mapping(hull)
-    except AttributeError as e:
-        # This usually occurs when it can't find the transport network.
-        # Return an empty geojson polygon.
-        geojson = {"type": "Polygon", "coordinates": []}
+    with timer("load_transport_network"):
+        network = load_transport_network("muenster")
 
-    with engine.begin() as conn:
-        conn.execute(
-            text(
+    with timer("load_network_geometry"):
+        network_geometry = load_network_geometry("muenster")
+
+    with timer("check_near_transport_network"):
+        is_near_transport_network = point.buffer(100).contains(network_geometry)
+
+    # Sanity check that the time is not too short.
+    if time_minutes < 1:
+        logger.warning(f"Time is too short: {time_minutes} minutes")
+        geojson = {"type": "Polygon", "coordinates": []}
+    # Sanity check that it's near the transport network.
+    elif not is_near_transport_network:
+        logger.warning(f"Point is not near the transport network: {point}")
+        geojson = {"type": "Polygon", "coordinates": []}
+    else:
+        with timer("calculate_isochrone"):
+            try:
+                isochrones = Isochrones(
+                    transport_network=network,
+                    origins=point,
+                    isochrones=[time_minutes],
+                    point_grid_resolution=100,
+                    point_grid_sample_ratio=0.3,
+                    transport_modes=[MODE_TO_R5PY_TRANSPORT_MODE[mode]],
+                )
+                # Create convex hull of destinations
+                multi_point = MultiPoint(isochrones.destinations.geometry)
+                hull = multi_point.convex_hull
+                geojson = mapping(hull)
+            except AttributeError as e:
+                # This usually occurs when it can't find the transport network.
+                # Return an empty geojson polygon.
+                geojson = {"type": "Polygon", "coordinates": []}
+
+    with timer("save_to_db"):
+        with engine.begin() as conn:
+            conn.execute(
+                text(
+                    """
+                    INSERT INTO isochrones (
+                        mode,
+                        time_seconds,
+                        origin,
+                        geom,
+                        created_at
+                    )
+                    VALUES (
+                        :mode,
+                        :time,
+                        ST_SetSRID(ST_MakePoint(:lon, :lat), 4326),
+                        ST_SetSRID(ST_GeomFromGeoJSON(:geom), 4326),
+                        now()
+                    )
+                    ON CONFLICT (mode, time_seconds, origin)
+                    DO UPDATE SET
+                        geom = EXCLUDED.geom,
+                        created_at = now()
                 """
-                INSERT INTO isochrones (
-                    mode,
-                    time_seconds,
-                    origin,
-                    geom,
-                    created_at
-                )
-                VALUES (
-                    :mode,
-                    :time,
-                    ST_SetSRID(ST_MakePoint(:lon, :lat), 4326),
-                    ST_SetSRID(ST_GeomFromGeoJSON(:geom), 4326),
-                    now()
-                )
-                ON CONFLICT (mode, time_seconds, origin)
-                DO UPDATE SET
-                    geom = EXCLUDED.geom,
-                    created_at = now()
-            """
-            ),
-            {
-                "mode": mode,
-                "time": time,
-                "lon": longitude,
-                "lat": latitude,
-                "geom": json.dumps(geojson),
-            },
-        )
+                ),
+                {
+                    "mode": mode,
+                    "time": time,
+                    "lon": longitude,
+                    "lat": latitude,
+                    "geom": json.dumps(geojson),
+                },
+            )
 
     return geojson
 
