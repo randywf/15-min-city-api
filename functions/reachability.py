@@ -2,7 +2,7 @@ import sys
 
 from sqlalchemy import Engine, text
 
-sys.argv.append(["--max-memory", "99%"]) # Before r5py for performance
+sys.argv.append(["--max-memory", "99%"])  # Before r5py for performance
 
 from geojson import GeoJSON
 from typing import Literal
@@ -66,7 +66,8 @@ def calculate_isochrone(
     # Try to load from DB for caching
     with engine.connect() as conn:
         result = conn.execute(
-            text("""
+            text(
+                """
                 SELECT ST_AsGeoJSON(geom) AS geojson
                 FROM isochrones
                 WHERE
@@ -78,7 +79,8 @@ def calculate_isochrone(
                     )
                     AND created_at >= now() - INTERVAL :ttl
                 LIMIT 1
-            """),
+            """
+            ),
             {
                 "mode": mode,
                 "time": time,
@@ -91,27 +93,31 @@ def calculate_isochrone(
         if result:
             return json.loads(result.geojson)
 
-
     # Calculate, if not existing.
     network = load_transport_network("muenster")
     time_minutes = time / 60
-    isochrones = Isochrones(
-        transport_network=network,
-        origins=point,
-        isochrones=[time_minutes],
-        point_grid_resolution=100,
-        point_grid_sample_ratio=0.3,
-        transport_modes=[MODE_TO_R5PY_TRANSPORT_MODE[mode]],
-    )
-
-    # Create convex hull of destinations
-    multi_point = MultiPoint(isochrones.destinations.geometry)
-    hull = multi_point.convex_hull
-    geojson = mapping(hull)
+    try:
+        isochrones = Isochrones(
+            transport_network=network,
+            origins=point,
+            isochrones=[time_minutes],
+            point_grid_resolution=100,
+            point_grid_sample_ratio=0.3,
+            transport_modes=[MODE_TO_R5PY_TRANSPORT_MODE[mode]],
+        )
+        # Create convex hull of destinations
+        multi_point = MultiPoint(isochrones.destinations.geometry)
+        hull = multi_point.convex_hull
+        geojson = mapping(hull)
+    except AttributeError as e:
+        # This usually occurs when it can't find the transport network.
+        # Return an empty geojson polygon.
+        geojson = {"type": "Polygon", "coordinates": []}
 
     with engine.begin() as conn:
         conn.execute(
-            text("""
+            text(
+                """
                 INSERT INTO isochrones (
                     mode,
                     time_seconds,
@@ -130,7 +136,8 @@ def calculate_isochrone(
                 DO UPDATE SET
                     geom = EXCLUDED.geom,
                     created_at = now()
-            """),
+            """
+            ),
             {
                 "mode": mode,
                 "time": time,
@@ -157,7 +164,7 @@ if __name__ == "__main__":
             longitude=test_longitude,
             latitude=test_latitude,
             mode=test_mode,
-            time=test_time
+            time=test_time,
         )
 
         print("Isochrone GeoJSON:")
