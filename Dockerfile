@@ -4,6 +4,7 @@ FROM python:3.12-slim
 RUN apt-get update && apt-get install -y \
     openjdk-21-jdk-headless \
     postgresql-client \
+    build-essential \
     && rm -rf /var/lib/apt/lists/*
 
 # Install uv.
