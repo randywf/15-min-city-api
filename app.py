@@ -117,6 +117,9 @@ async def point_to_poi(
     - polygon: generated isochrone polygonW
     """
 
+    if isinstance(amenity_ordered_by_relevance, str):
+        amenity_ordered_by_relevance = json.loads(amenity_ordered_by_relevance)
+
     engine = create_db_engine()
     # Compute polygon from lon/lat and mode
     polygon = calculate_isochrone(engine, longitude, latitude, mode, time)
