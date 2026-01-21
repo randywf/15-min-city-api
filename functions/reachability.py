@@ -63,18 +63,8 @@ def load_transport_network(region: str) -> TransportNetwork:
     if not files:
         raise FileNotFoundError(f"No .osm.pbf file found for region '{region}'")
 
+    logger.info(f"Loading from file: {files[0]}")
     return TransportNetwork(files[0])
-
-
-def load_network_geometry(region: str):
-    region_dir = DATA_DIR / region
-    files = list(region_dir.glob("*.osm.pbf"))
-    if not files:
-        raise FileNotFoundError(f"No .osm.pbf file found")
-
-    osm = pyrosm.OSM(files[0])
-    streets = osm.get_network(network_type="all")
-    return streets.unary_union  # Returns a single geometry
 
 
 def calculate_isochrone(
@@ -133,19 +123,9 @@ def calculate_isochrone(
     with timer("load_transport_network"):
         network = load_transport_network("muenster")
 
-    with timer("load_network_geometry"):
-        network_geometry = load_network_geometry("muenster")
-
-    with timer("check_near_transport_network"):
-        is_near_transport_network = point.buffer(100).contains(network_geometry)
-
     # Sanity check that the time is not too short.
     if time_minutes < 1:
         logger.warning(f"Time is too short: {time_minutes} minutes")
-        geojson = {"type": "Polygon", "coordinates": []}
-    # Sanity check that it's near the transport network.
-    elif not is_near_transport_network:
-        logger.warning(f"Point is not near the transport network: {point}")
         geojson = {"type": "Polygon", "coordinates": []}
     else:
         with timer("calculate_isochrone"):
@@ -161,8 +141,12 @@ def calculate_isochrone(
                 # Create convex hull of destinations
                 multi_point = MultiPoint(isochrones.destinations.geometry)
                 hull = multi_point.convex_hull
-                geojson = mapping(hull)
-            except AttributeError as e:
+                # If empty geometry, return an empty geojson polygon.
+                if hull.is_empty:
+                    geojson = {"type": "Polygon", "coordinates": []}
+                else:
+                    geojson = mapping(hull)
+            except AttributeError:
                 # This usually occurs when it can't find the transport network.
                 # Return an empty geojson polygon.
                 geojson = {"type": "Polygon", "coordinates": []}
