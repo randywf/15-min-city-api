@@ -6,8 +6,12 @@ from shapely.geometry import shape
 
 from functions.reachability import Mode, calculate_isochrone, MODES, TIME_DEFAULT
 from functions.overpass_models import OverpassElement
-from functions.poi import get_amenities_in_polygon, get_amenities_in_polygon_postgres, \
-    build_default_amenity_state, get_all_pois_postgres
+from functions.poi import (
+    get_amenities_in_polygon,
+    get_amenities_in_polygon_postgres,
+    build_default_amenity_state,
+    get_all_pois_postgres,
+)
 from typing import List, Literal, Any
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import create_engine, Engine
@@ -46,6 +50,7 @@ def create_db_engine() -> Engine:
         future=True,
     )
 
+
 @app.get("/reachability")
 def get_reachability(
     longitude: float,
@@ -72,23 +77,25 @@ async def amenities_in_polygon(
     amenities = await get_amenities_in_polygon(polygon)
     return amenities
 
+
 @app.get("/amenities")
 async def get_amenities():
     """
-       Returns an ordered list with all amenities.:
-       - amenities: list of POIs
-       """
+    Returns an ordered list with all amenities.:
+    - amenities: list of POIs
+    """
     return build_default_amenity_state()
 
 
 @app.get("/heatmap_pois")
 def get_heatmap_pois():
     """
-       Returns an ordered list with all amenities.:
-       - amenities: list of POIs
-       """
+    Returns an ordered list with all amenities.:
+    - amenities: list of POIs
+    """
     engine = create_db_engine()
     return get_all_pois_postgres(engine)
+
 
 @app.get("/point_to_poi")
 async def point_to_poi(
@@ -101,8 +108,7 @@ async def point_to_poi(
     amenity_ordered_by_relevance: Any = Query(
         default=build_default_amenity_state(),
         description="Ordered amenity relevance (highest priority first)",
-    )
-    ,
+    ),
 ):
     """
     Returns a dictionary with:
@@ -117,9 +123,7 @@ async def point_to_poi(
 
     query_point = Point(longitude, latitude)
 
-
     # Query amenities inside the generated polygon
-
     def geojson_to_polygon(geojson: dict[str, Any]) -> Polygon:
         geom = shape(geojson)
 
@@ -128,7 +132,12 @@ async def point_to_poi(
 
         return geom
 
-    amenities = await get_amenities_in_polygon_postgres(engine, geojson_to_polygon(polygon), query_point, amenity_state=amenity_ordered_by_relevance) #TODO: Add the filter here aswell.
+    amenities = await get_amenities_in_polygon_postgres(
+        engine,
+        geojson_to_polygon(polygon),
+        query_point,
+        amenity_state=amenity_ordered_by_relevance,
+    )  # TODO: Add the filter here aswell.
 
     # Scoring logic call
     max_distance = max(a["distance"] for a in amenities) if amenities else 1
