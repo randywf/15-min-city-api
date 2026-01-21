@@ -1,5 +1,7 @@
 services:
   app:
+    ports:
+      - "5678:5678" # Debug port
     environment:
       DEBUG_TIMING: "true"
     volumes:
@@ -14,5 +16,5 @@ services:
         echo 'Running POI download...' &&
         uv run python scripts/poi_download.py &&
         echo 'Starting FastAPI in dev mode...' &&
-        uv run fastapi dev app.py --port 8000 --host 0.0.0.0
+        uv run python -m debugpy --listen 0.0.0.0:5678 -m fastapi dev app.py --port 8000 --host 0.0.0.0
       "
