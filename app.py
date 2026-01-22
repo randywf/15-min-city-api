@@ -1,13 +1,17 @@
 import json
 import toml
-from fastapi import FastAPI, Query, HTTPException
+from fastapi import FastAPI, Query, HTTPException, Body
 from shapely import Point, Polygon
 from shapely.geometry import shape
 
 from functions.reachability import Mode, calculate_isochrone, MODES, TIME_DEFAULT
 from functions.overpass_models import OverpassElement
-from functions.poi import get_amenities_in_polygon, get_amenities_in_polygon_postgres, \
-    build_default_amenity_state, get_all_pois_postgres
+from functions.poi import (
+    get_amenities_in_polygon,
+    get_amenities_in_polygon_postgres,
+    build_default_amenity_state,
+    get_all_pois_postgres,
+)
 from typing import List, Literal, Any
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import create_engine, Engine
@@ -32,7 +36,10 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+    allow_origins=[
+        "http://127.0.0.1:5173",
+        "http://localhost:5173",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -45,6 +52,7 @@ def create_db_engine() -> Engine:
         echo=False,
         future=True,
     )
+
 
 @app.get("/reachability")
 def get_reachability(
@@ -77,6 +85,8 @@ async def get_amenities():
     """
        Returns an ordered list with all amenities.:
        - amenities: list of POIs
+       Function to get predived/preordered list of all amenities.
+       Important to be able to request amenities_ordered_by_relevance in point_to_poi endpoint.
        """
     return build_default_amenity_state()
 
@@ -90,7 +100,7 @@ def get_heatmap_pois():
     engine = create_db_engine()
     return get_all_pois_postgres(engine)
 
-@app.get("/point_to_poi")
+@app.post("/point_to_poi")
 async def point_to_poi(
     longitude: float = Query(..., description="Longitude of the center point"),
     latitude: float = Query(..., description="Latitude of the center point"),
@@ -98,7 +108,7 @@ async def point_to_poi(
         "walk", description="Isochrone mode: walk, bike, or car"
     ),
     time: int = Query(600, description="Isochrone time in seconds"),
-    amenity_ordered_by_relevance: Any = Query(
+    amenity_ordered_by_relevance: Any = Body(
         default=build_default_amenity_state(),
         description="Ordered amenity relevance (highest priority first)",
     )
@@ -111,15 +121,16 @@ async def point_to_poi(
     - polygon: generated isochrone polygonW
     """
 
+    if isinstance(amenity_ordered_by_relevance, str):
+        amenity_ordered_by_relevance = json.loads(amenity_ordered_by_relevance)
+
     engine = create_db_engine()
     # Compute polygon from lon/lat and mode
     polygon = calculate_isochrone(engine, longitude, latitude, mode, time)
 
     query_point = Point(longitude, latitude)
 
-
     # Query amenities inside the generated polygon
-
     def geojson_to_polygon(geojson: dict[str, Any]) -> Polygon:
         geom = shape(geojson)
 
@@ -128,7 +139,12 @@ async def point_to_poi(
 
         return geom
 
-    amenities = await get_amenities_in_polygon_postgres(engine, geojson_to_polygon(polygon), query_point, amenity_state=amenity_ordered_by_relevance) #TODO: Add the filter here aswell.
+    amenities = await get_amenities_in_polygon_postgres(
+        engine,
+        geojson_to_polygon(polygon),
+        query_point,
+        amenity_state=amenity_ordered_by_relevance,
+    )  # TODO: Add the filter here aswell.
 
     # Scoring logic call
     max_distance = max(a["distance"] for a in amenities) if amenities else 1
