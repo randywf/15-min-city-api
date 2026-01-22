@@ -1,4 +1,96 @@
-# 15-Min City API
+<a id="readme-top"></a>
+
+<div align="center">
+ <h1>Welcome to the backend repository for the 15-Minute City application</h1>
+
+<br />
+<div align="center">
+  <p align="center">
+    <img src="image/logo_15min.png" alt="15-min-city" width="300"/>
+  </p>
+</div>
+
+  
+
+  <p align="center">
+    An application to explore the city of Münster and find your ideal location!
+    <br />
+    <a href="https://github.com/othneildrew/Best-README-Template"><strong>Explore the docs »</strong></a>
+    <br />
+    <br />
+    <a href="https://github.com/othneildrew/Best-README-Template">View Demo</a>
+    &middot;
+    <a href="https://github.com/othneildrew/Best-README-Template/issues/new?labels=bug&template=bug-report---.md">Report Bug</a>
+    &middot;
+    <a href="https://github.com/othneildrew/Best-README-Template/issues/new?labels=enhancement&template=feature-request---.md">Request Feature</a>
+  </p>
+</div>
+
+## Contributors
+
+<p align="center">
+  <a href="https://github.com/Hex-commits">
+    <img src="https://avatars.githubusercontent.com/Hex-commits?s=120" width="80" alt="Jan-Philipp Wegmeyer"/>
+  </a>
+  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+  <a href="https://github.com/randywf">
+    <img src="https://avatars.githubusercontent.com/randywf?s=120" width="80" alt="Randy Flores"/>
+  </a>
+  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+  <a href="https://github.com/pmunding">
+    <img src="https://avatars.githubusercontent.com/pmunding?s=120" width="80" alt="Philipp Mundinger"/>
+  </a>
+  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+  <a href="https://github.com/nimesh7814">
+    <img src="https://avatars.githubusercontent.com/nimesh7814?s=120" width="80" alt="Nimesh Akalanka"/>
+  </a>
+  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+  <a href="https://github.com/laurenfissel11-ux">
+    <img src="https://avatars.githubusercontent.com/laurenfissel11-ux?s=120" width="80" alt="Lauren"/>
+  </a>
+  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+  <a href="https://github.com/Aadilwaris">
+     <img src="https://avatars.githubusercontent.com/Aadilwaris?s=120" width="80" alt="Adil Waris"/>
+  </a>
+</p>
+
+<!-- TABLE OF CONTENTS -->
+<details>
+  <summary>Table of Contents</summary>
+  <ol>
+    <li>
+      <a href="#about-the-project">About The Project</a>
+      <ul>
+        <li><a href="#built-with">Built With</a></li>
+      </ul>
+    </li>
+    <li>
+      <a href="#getting-started">Getting Started</a>
+      <ul>
+        <li><a href="#prerequisites">Prerequisites</a></li>
+        <li><a href="#installation">Installation</a></li>
+      </ul>
+    </li>
+    <li><a href="#usage">Usage</a></li>
+    <li><a href="#roadmap">Roadmap</a></li>
+    <li><a href="#contributing">Contributing</a></li>
+    <li><a href="#license">License</a></li>
+    <li><a href="#contact">Contact</a></li>
+    <li><a href="#acknowledgments">Acknowledgments</a></li>
+  </ol>
+</details>
+
+### Built With
+
+![JavaScript](https://img.shields.io/badge/JavaScript-ES6-yellow)
+![Python](https://img.shields.io/badge/Python-3.x-blue)
+![FastAPI](https://img.shields.io/badge/FastAPI-Backend-teal)
+![Docker](https://img.shields.io/badge/Docker-Container-blue)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Database-blue)
+![Isochrone](https://img.shields.io/badge/Isochrone-Routing-green)
+![Stack Overflow](https://img.shields.io/badge/StackOverflow-Used-orange)
+
+## Description of the application
 
 API for calculating 15-minute city accessibility metrics using isochrones and POI analysis.
 
@@ -110,6 +202,11 @@ docker-compose down
    uv run fastapi dev app.py
    ```
 
+   Or using uvicorn directly:
+   ```sh
+   uvicorn app:app --reload
+   ```
+
 Note: You'll need a PostgreSQL/PostGIS database running separately.
 
 ## Services
@@ -121,6 +218,14 @@ The Docker setup includes:
 - **pgAdmin** (port 5050): Database administration interface
   - Email: admin@admin.de
   - Password: admin
+
+Once started, the API will be available at:
+
+| Service                         | URL                           |
+|---------------------------------|-------------------------------|
+| API Root                        | http://localhost:8000         |
+| Interactive API Docs (Swagger)  | http://localhost:8000/docs    |
+| Alternative API Docs (ReDoc)    | http://localhost:8000/redoc   |
 
 ## Database Setup
 
@@ -153,3 +258,16 @@ Environment variables can be set in `docker-compose.yaml` or `docker-compose.dev
 │   └── poi_download.py   # POI data download
 ├── data/                 # OSM data and boundaries
 └── docker-compose*.yaml  # Container orchestration 
+```
+
+<hr>
+
+<div align="center" style="font-size: 0.85em; color: #666; line-height: 1.6;">
+
+© 2026 <strong>15-min-city</strong><br>
+<strong>Course:</strong> Geoinformation in Society<br>
+<strong>Responsible:</strong> Contact contributors<br>
+<strong>Date:</strong> 02.02.2026<br>
+<strong>University of Münster</strong>
+
+</div>
