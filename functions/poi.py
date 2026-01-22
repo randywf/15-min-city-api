@@ -5,6 +5,9 @@ import asyncio
 from shapely.geometry import Polygon, Point
 from sqlalchemy import text, Engine
 from typing import List, Union, Dict, Any
+from shapely.geometry import Polygon, Point
+from sqlalchemy import text, Engine
+from typing import List, Union, Dict, Any
 
 # Define a polygon around a park (example coordinates)
 PARK_POLYGON_COORDS = "51.968 7.625 51.970 7.635 51.965 7.638 51.963 7.628 51.968 7.625"
@@ -108,8 +111,8 @@ AMENITY_CATEGORIES = {
 }
 
 
-
 OVERPASS_URL = "https://overpass-api.de/api/interpreter"
+
 
 def build_default_amenity_state() -> Dict[str, Any]:
     """
@@ -122,12 +125,12 @@ def build_default_amenity_state() -> Dict[str, Any]:
             "rank": cfg["rank"],
             "enabled": True,
             "amenities": {
-                amenity.value: {"enabled": True}
-                for amenity in cfg["amenities"]
+                amenity.value: {"enabled": True} for amenity in cfg["amenities"]
             },
         }
 
     return state
+
 
 def extract_enabled_amenities(state: dict) -> list[str]:
     enabled = []
@@ -201,7 +204,6 @@ async def fetch_overpass_data(query: str) -> List[OverpassElement]:
     )
 
 
-
 async def get_amenities_in_polygon_postgres(
     engine: Engine,
     polygon: Polygon,
@@ -216,7 +218,8 @@ async def get_amenities_in_polygon_postgres(
     polygon_wkt = polygon.wkt
     lon, lat = query_point.x, query_point.y
 
-    sql = text("""
+    sql = text(
+        """
                WITH ranked AS (SELECT id,
                                       name,
                                       amenity,
@@ -244,9 +247,9 @@ async def get_amenities_in_polygon_postgres(
                       ST_X(geometry) AS lon,
                       distance
                FROM ranked
-               WHERE rn <= 2
                ORDER BY amenity, distance;
-               """)
+               """
+    )
 
     with engine.connect() as conn:
         result = conn.execute(
@@ -256,11 +259,10 @@ async def get_amenities_in_polygon_postgres(
                 "lat": lat,
                 "polygon_wkt": polygon_wkt,
                 "enabled_amenities": enabled_amenities,
-            }
+            },
         )
 
         return result.mappings().all()
-
 
 
 async def get_amenities_in_polygon(polygon: str) -> list[OverpassElement]:
@@ -291,13 +293,15 @@ async def get_amenities_in_polygon(polygon: str) -> list[OverpassElement]:
 
     return elements
 
+
 def get_all_pois_postgres(engine: Engine):
     """
     Get all pois for heatmap
     :param engine:
     :return:
     """
-    sql = text("""
+    sql = text(
+        """
         SELECT
             id,
             name,
@@ -307,7 +311,8 @@ def get_all_pois_postgres(engine: Engine):
             ST_X(geometry) AS lon
         FROM amenities
         ORDER BY amenity, name;
-    """)
+    """
+    )
 
     with engine.connect() as conn:
         result = conn.execute(sql)
