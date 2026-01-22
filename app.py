@@ -1,6 +1,6 @@
 import json
 import toml
-from fastapi import FastAPI, Query, HTTPException
+from fastapi import FastAPI, Query, HTTPException, Body
 from shapely import Point, Polygon
 from shapely.geometry import shape
 
@@ -32,7 +32,10 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+    allow_origins=[
+        "http://127.0.0.1:5173",
+        "http://localhost:5173",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -77,6 +80,8 @@ async def get_amenities():
     """
        Returns an ordered list with all amenities.:
        - amenities: list of POIs
+       Function to get predived/preordered list of all amenities.
+       Important to be able to request amenities_ordered_by_relevance in point_to_poi endpoint.
        """
     return build_default_amenity_state()
 
@@ -90,7 +95,7 @@ def get_heatmap_pois():
     engine = create_db_engine()
     return get_all_pois_postgres(engine)
 
-@app.get("/point_to_poi")
+@app.post("/point_to_poi")
 async def point_to_poi(
     longitude: float = Query(..., description="Longitude of the center point"),
     latitude: float = Query(..., description="Latitude of the center point"),
@@ -98,7 +103,7 @@ async def point_to_poi(
         "walk", description="Isochrone mode: walk, bike, or car"
     ),
     time: int = Query(600, description="Isochrone time in seconds"),
-    amenity_ordered_by_relevance: Any = Query(
+    amenity_ordered_by_relevance: Any = Body(
         default=build_default_amenity_state(),
         description="Ordered amenity relevance (highest priority first)",
     )
@@ -138,5 +143,7 @@ async def point_to_poi(
         amenity_state=amenity_ordered_by_relevance,
         max_distance=max_distance,
     )
+
+    print(amenities)
 
     return {"amenities": amenities, "score": score, "polygon": polygon}

@@ -244,7 +244,6 @@ async def get_amenities_in_polygon_postgres(
                       ST_X(geometry) AS lon,
                       distance
                FROM ranked
-               WHERE rn <= 2
                ORDER BY amenity, distance;
                """)
 
