@@ -8,6 +8,7 @@
   <p align="center">
     <img src="image/logo_15min.png" alt="15-min-city" width="300"/>
   </p>
+</div>
 
   
 
