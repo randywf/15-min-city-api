@@ -14,6 +14,9 @@ PARK_POLYGON_COORDS = "51.968 7.625 51.970 7.635 51.965 7.638 51.963 7.628 51.96
 
 
 class Amenity(Enum):
+    """
+    Amenity list relevant for fetching the amenities from Overpass.
+    """
     # --- Mobility ---
     BICYCLE_PARKING = "bicycle_parking"
     PARKING = "parking"
@@ -51,6 +54,7 @@ class Amenity(Enum):
     # --- Other ---
     TOILETS = "toilets"
 
+#Categories, in order to provide a bit more structure to it.
 
 AMENITY_CATEGORIES = {
     "mobility": {
@@ -113,7 +117,6 @@ AMENITY_CATEGORIES = {
 
 OVERPASS_URL = "https://overpass-api.de/api/interpreter"
 
-
 def build_default_amenity_state() -> Dict[str, Any]:
     """
     Returns a frontend-ready amenity state structure.
@@ -133,6 +136,11 @@ def build_default_amenity_state() -> Dict[str, Any]:
 
 
 def extract_enabled_amenities(state: dict) -> list[str]:
+    """
+    Extracts amenity state's enabled amenities.
+    :param state: Amenity-State.
+    :return: List of enabled amenities.
+    """
     enabled = []
 
     for category in state.values():
@@ -210,6 +218,14 @@ async def get_amenities_in_polygon_postgres(
     query_point: Point,
     amenity_state: dict,
 ):
+    """
+    Returns amenities stored in Postgres.
+    :param engine: SQLAlchemy engine.
+    :param polygon: Polygon.
+    :param query_point: Point.
+    :param amenity_state: Amenity state.
+    :return: Amenities.
+    """
     enabled_amenities = extract_enabled_amenities(amenity_state)
 
     if not enabled_amenities:

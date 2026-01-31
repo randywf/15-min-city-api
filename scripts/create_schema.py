@@ -17,6 +17,9 @@ SQL_FILES = SQL_DIR.glob("*.sql")
 
 
 def create_schema():
+    """
+    Creates the schema in the database.
+    """
     with psycopg2.connect(POSTGRES_CONNECTION_STRING) as conn:
         with conn.cursor() as cursor:
             for sql_file in SQL_FILES:

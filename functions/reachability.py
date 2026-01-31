@@ -13,10 +13,6 @@ from typing import Literal
 from pathlib import Path
 from r5py import Isochrones, TransportNetwork, TransportMode
 from shapely.geometry import Point, MultiPoint, mapping
-import json
-from shapely.geometry.base import BaseGeometry
-from shapely.geometry.polygon import Polygon
-import pyrosm
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)

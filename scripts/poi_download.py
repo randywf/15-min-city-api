@@ -7,15 +7,13 @@ import pyproj
 from shapely.geometry import Polygon, Point
 from sqlalchemy import create_engine, Engine, text
 import geopandas as gpd
-
 from pathlib import Path
 import sys
+from functions.poi import get_amenities_in_polygon
+from dotenv import load_dotenv
 
 root_dir = Path(__file__).parent.parent
 sys.path.append(str(root_dir))
-
-from functions.poi import get_amenities_in_polygon
-from dotenv import load_dotenv
 
 load_dotenv()
 
@@ -29,6 +27,10 @@ POSTGRES_CONNECTION_STRING = os.getenv("DATABASE_URL")
 
 
 def load_muenster_boundary() -> Polygon:
+    """
+
+    :return: Polygon of the relevant city, Muenster.
+    """
     logger.info("Loading Münster boundary")
 
     with open(
@@ -40,6 +42,11 @@ def load_muenster_boundary() -> Polygon:
 
 
 def reproject_polygon(polygon: Polygon) -> Polygon:
+    """
+    Reproject a polygon from its boundary to a EPSG:4326 CRS.
+    :param polygon: Polygon to reproject.
+    :return: Reprojected polygon.
+    """
     logger.info("Reprojecting boundary to EPSG:4326")
 
     transformer = pyproj.Transformer.from_crs(
@@ -54,6 +61,11 @@ def reproject_polygon(polygon: Polygon) -> Polygon:
 
 
 def polygon_to_overpass_string(polygon: Polygon) -> str:
+    """
+    Overpass requires non-standard-Format of data.
+    :param polygon: Polygon.
+    :return: Overpass string.
+    """
     # Overpass expects "lat lon lat lon ..."
     return " ".join(
         f"{lat:.6f} {lon:.6f}"
@@ -61,7 +73,13 @@ def polygon_to_overpass_string(polygon: Polygon) -> str:
     )
 
 
-async def download_amenities(boundary: Polygon) -> list[dict]:
+async def get_amenities_from_overpass(boundary: Polygon) -> list[dict]:
+    """
+    In order to being able to process distance and further filtering, aswell as simply storing mostly static data.
+
+    :param boundary: Polygon-Boundary where the POIs are being fetched for.
+    :return: List of amenity POIs in the area.
+    """
     logger.info("Downloading amenities for full boundary")
 
     coords = polygon_to_overpass_string(boundary)
@@ -82,6 +100,11 @@ async def download_amenities(boundary: Polygon) -> list[dict]:
 
 
 def transfer_amenities_to_database(amenities: list[dict], engine: Engine):
+    """
+    Transfers amenities into database.
+    :param amenities: List of amenities.
+    :param engine: SQLAlchemy engine.
+    """
     logger.info("Transferring amenities to database")
 
     df = gpd.GeoDataFrame(amenities, geometry="geometry", crs="EPSG:4326")
@@ -136,5 +159,5 @@ if __name__ == "__main__":
     boundary = load_muenster_boundary()
     boundary = reproject_polygon(boundary)
 
-    amenities = asyncio.run(download_amenities(boundary))
+    amenities = asyncio.run(get_amenities_from_overpass(boundary))
     transfer_amenities_to_database(amenities, engine)
