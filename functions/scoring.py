@@ -1,7 +1,10 @@
 import math
 from pprint import pprint
 
+from typing_extensions import deprecated
 
+
+@deprecated
 def build_amenity_importance_map(
     amenity_state: dict,
     *,
@@ -9,6 +12,8 @@ def build_amenity_importance_map(
 ) -> dict[str, float]:
     """
     Returns: { amenity_name: importance }
+
+    Deprecated, because we use the scoringg in the frontend.
     """
     # only enabled categories
     enabled_categories = [

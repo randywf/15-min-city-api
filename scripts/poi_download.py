@@ -11,11 +11,12 @@ import geopandas as gpd
 from pathlib import Path
 import sys
 
+from functions.poi import get_amenities_in_polygon
+from dotenv import load_dotenv
+
 root_dir = Path(__file__).parent.parent
 sys.path.append(str(root_dir))
 
-from functions.poi import get_amenities_in_polygon
-from dotenv import load_dotenv
 
 load_dotenv()
 
