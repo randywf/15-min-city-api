@@ -34,6 +34,9 @@ app = FastAPI(
     version=version,
 )
 
+"""
+CORS-Issues in case for Server Deployment. 
+"""
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -61,6 +64,14 @@ def get_reachability(
     mode: Mode = Query(default=MODES[0]),
     time: int = Query(default=TIME_DEFAULT),
 ):
+    """
+    Returns Isochrone for the given point.
+    :param longitude: Longitude of the point.
+    :param latitude: Latitude of the point.
+    :param mode: Mode in given transporting list.
+    :param time: Time in minutes.
+    :return: Returns Isochrone for the given point.
+    """
     return calculate_isochrone(longitude, latitude, mode, time)
 
 
@@ -144,7 +155,7 @@ async def point_to_poi(
         geojson_to_polygon(polygon),
         query_point,
         amenity_state=amenity_ordered_by_relevance,
-    )  # TODO: Add the filter here aswell.
+    )
 
     # Scoring logic call
     max_distance = max(a["distance"] for a in amenities) if amenities else 1
